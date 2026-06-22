@@ -1,0 +1,2156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: #eef3ee; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; display: flex; flex-direction: column; }
+
+  #auth-screen { position: fixed; inset: 0; z-index: 1000; background: linear-gradient(135deg, #eef3ee 0%, #dff0df 100%); display: flex; align-items: center; justify-content: center; }
+  .auth-card { background: #fff; border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,0.12); padding: 40px 36px 32px; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 16px; }
+  .auth-logo { display: flex; align-items: center; gap: 9px; margin-bottom: 2px; }
+  .auth-logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg,#3d8b41,#6dbf67); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 19px; color: #fff; font-weight: 900; box-shadow: 0 2px 8px rgba(61,139,65,0.3); }
+  .auth-logo-text { font-weight: 800; font-size: 20px; color: #2e6b31; letter-spacing: 0.08em; }
+  .auth-title { font-size: 20px; font-weight: 700; color: #222; }
+  .auth-subtitle { font-size: 13px; color: #888; margin-top: -8px; line-height: 1.6; }
+  .auth-field { display: flex; flex-direction: column; gap: 6px; }
+  .auth-field label { font-size: 12px; font-weight: 600; color: #555; }
+  .auth-field input { border: 1.5px solid #ddd; border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; color: #333; transition: border-color 0.15s; }
+  .auth-field input:focus { border-color: #3d8b41; }
+  .auth-field input.auth-mono { font-family: monospace; font-size: 12px; }
+  .auth-error { color: #e53935; font-size: 12px; min-height: 16px; }
+  .auth-success { color: #3d8b41; font-size: 12px; font-weight: 600; line-height: 1.6; }
+  .auth-btn { width: 100%; background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; margin-top: 4px; }
+  .auth-btn:hover { background: #4caf50; }
+  .auth-btn:disabled { background: #b2cfb3; cursor: not-allowed; }
+  .auth-switch { font-size: 12px; color: #888; text-align: center; }
+  .auth-switch a { color: #3d8b41; cursor: pointer; font-weight: 600; }
+  .auth-switch a:hover { text-decoration: underline; }
+  .auth-divider { border: none; border-top: 1px solid #eee; margin: 0; }
+
+  #setup-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; }
+  #setup-modal.visible { display: flex; }
+  .setup-card { background: #fff; border-radius: 16px; padding: 32px 32px 28px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 14px; }
+  .setup-card h2 { font-size: 18px; color: #333; }
+  .setup-card p { font-size: 13px; color: #666; line-height: 1.7; }
+  .setup-sql { background: #f5f5f5; border-radius: 8px; padding: 14px; font-family: monospace; font-size: 11px; color: #333; white-space: pre; overflow-x: auto; border: 1px solid #e0e0e0; line-height: 1.6; }
+  .setup-step { font-size: 12px; font-weight: 700; color: #3d8b41; margin-bottom: -6px; }
+  #btn-setup-done { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 11px 24px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; align-self: flex-start; }
+  #btn-setup-done:hover { background: #4caf50; }
+
+  #loading-overlay { position: fixed; inset: 0; z-index: 900; background: rgba(238,243,238,0.85); display: none; align-items: center; justify-content: center; font-size: 14px; color: #3d8b41; font-weight: 600; gap: 10px; }
+  #loading-overlay.visible { display: flex; }
+  .spinner { width: 22px; height: 22px; border: 3px solid #b2cfb3; border-top-color: #3d8b41; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #main-app { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  #main-app.visible { display: flex; }
+
+  #toolbar { height: 52px; background: #fff; border-bottom: 1px solid #dde8dd; display: flex; align-items: center; padding: 0 14px; gap: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); z-index: 200; flex-shrink: 0; }
+  .logo { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg,#3d8b41,#6dbf67); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #fff; font-weight: 900; box-shadow: 0 2px 6px rgba(61,139,65,0.35); }
+  .logo-text { font-weight: 800; font-size: 16px; color: #2e6b31; letter-spacing: 0.08em; }
+  .divider { width: 1px; height: 28px; background: #e0e0e0; flex-shrink: 0; }
+  .btn-primary { background: #3d8b41; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .btn-primary:hover { background: #4caf50; }
+  .spacer { flex: 1; }
+  .zoom-controls { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+  .btn-zoom { width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #fff; font-size: 14px; }
+  .btn-zoom:hover { background: #f5f5f5; }
+  #zoom-label { font-size: 11px; color: #888; min-width: 36px; text-align: center; }
+  .btn-reset { height: 28px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #fff; font-size: 10px; padding: 0 8px; color: #666; }
+  .btn-reset:hover { background: #f5f5f5; }
+  #user-info { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  #user-email { font-size: 10px; color: #bbb; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; }
+  @media (min-width: 1100px) { #user-email { display: block; } }
+  #btn-logout { width: 28px; height: 28px; border: 1px solid #e0e0e0; border-radius: 5px; cursor: pointer; background: #fafafa; font-size: 14px; padding: 0; color: #aaa; flex-shrink: 0; transition: background 0.12s, color 0.12s; display: flex; align-items: center; justify-content: center; }
+  #btn-logout:hover { background: #ffebee; border-color: #e57373; color: #c62828; }
+  #btn-help { width: 28px; height: 28px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 13px; font-weight: 700; color: #3d8b41; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
+  #btn-help:hover { background: #dff0df; }
+
+  /* help modal */
+  #help-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #help-modal.visible { display: flex; }
+  .help-card { background: #fff; border-radius: 16px; padding: 28px 28px 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 18px; }
+  .help-card h2 { font-size: 17px; color: #2e6b31; display: flex; align-items: center; gap: 8px; }
+  .help-section { display: flex; flex-direction: column; gap: 8px; }
+  .help-section h3 { font-size: 12px; font-weight: 700; color: #3d8b41; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+  .help-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #444; line-height: 1.6; }
+  .help-icon { font-size: 18px; flex-shrink: 0; width: 26px; text-align: center; }
+  #btn-help-close { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  #btn-help-close:hover { background: #4caf50; }
+  .help-tip { background: #f0f7f0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #555; line-height: 1.7; }
+  #bc-wrap { display: flex; align-items: center; flex: 1; min-width: 100px; overflow: hidden; gap: 0; }
+  #bc-ancestors { display: flex; align-items: center; flex-shrink: 1; overflow: hidden; min-width: 0; }
+  .crumb-link { font-size: 12px; color: #999; cursor: pointer; white-space: nowrap; padding: 2px 5px; border-radius: 4px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; transition: background 0.12s, color 0.12s; }
+  .crumb-link:hover { background: #f0f7f0; color: #3d8b41; }
+  .crumb-sep { font-size: 12px; color: #ccc; padding: 0 1px; flex-shrink: 0; }
+  #board-name-input { border: none; background: transparent; font-size: 13px; font-weight: 700; color: #2e6b31; outline: none; cursor: pointer; min-width: 70px; max-width: 150px; flex-shrink: 1; border-bottom: 1.5px dashed transparent; padding: 2px 4px; border-radius: 3px; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; transition: border-color 0.15s; }
+  #board-name-input:hover { border-bottom-color: #b2cfb3; }
+  #board-name-input:focus { border-bottom-color: #3d8b41; cursor: text; }
+  #btn-add-child { height: 26px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: background 0.12s; }
+  #btn-add-child:hover { background: #dff0df; }
+  #btn-boards { height: 26px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 4px; flex-shrink: 0; transition: background 0.12s; }
+  #btn-boards:hover { background: #dff0df; }
+  #board-count { font-size: 10px; background: #3d8b41; color: #fff; border-radius: 10px; padding: 1px 6px; }
+  #toggle-group { display: flex; gap: 3px; flex-shrink: 0; }
+  .btn-layer { height: 26px; border-radius: 5px; cursor: pointer; font-size: 11px; padding: 0 8px; font-weight: 600; white-space: nowrap; border: 1px solid #b2cfb3; background: #e8f5e9; color: #2e6b31; transition: background 0.12s, color 0.12s, border-color 0.12s; }
+  .btn-layer.off { background: #f2f2f2; color: #bbb; border-color: #e0e0e0; }
+  #btn-img-panel { height: 26px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: background 0.12s; }
+  #btn-img-panel:hover { background: #dff0df; }
+  #btn-img-panel.active { background: #e8f5e9; border-color: #3d8b41; }
+
+  #canvas { flex: 1; position: relative; overflow: hidden; background-color: #eef3ee; background-image: radial-gradient(circle, #c8ddc8 1px, transparent 1px); background-size: 24px 24px; }
+  #world { position: absolute; left: 0; top: 0; width: 3200px; height: 2000px; transform-origin: 0 0; }
+  #world.hide-pins .pin-dot:not(.pending) { display: none !important; }
+  #world.hide-lines #connections-svg { display: none !important; }
+  #world.hide-cards .card { display: none !important; }
+  #connections-svg { position: absolute; left: 0; top: 0; width: 3200px; height: 2000px; pointer-events: none; z-index: 4; overflow: visible; }
+  #canvas-frame { position: absolute; left: 900px; top: 550px; width: 1400px; height: 900px; border: 1.5px dashed #c8ddc8; border-radius: 16px; pointer-events: none; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  #canvas-frame .cf-icon { font-size: 48px; opacity: 0.22; transition: opacity 0.3s; }
+  #canvas-frame .cf-hint { font-size: 14px; color: #a8c8a8; font-weight: 500; text-align: center; opacity: 0.9; transition: opacity 0.3s; }
+  #canvas-frame.has-images .cf-icon, #canvas-frame.has-images .cf-hint { opacity: 0; }
+  .img-wrap { position: absolute; }
+  .board-img { display: block; max-width: 700px; max-height: 550px; border-radius: 10px; box-shadow: 0 6px 28px rgba(0,0,0,0.17); cursor: crosshair; user-select: none; transition: box-shadow 0.2s; }
+  .board-img:hover { box-shadow: 0 6px 28px rgba(0,0,0,0.17), 0 0 0 2px rgba(61,139,65,0.3); }
+  .img-handle { position: absolute; top: 8px; left: 8px; z-index: 8; width: 26px; height: 26px; border-radius: 5px; background: rgba(20,20,20,0.52); color: #fff; font-size: 15px; line-height: 26px; text-align: center; cursor: grab; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-wrap:hover .img-handle { opacity: 1; }
+  .img-handle:active { cursor: grabbing; }
+  .img-rotate-handle { position: absolute; top: 8px; right: 8px; z-index: 9; width: 26px; height: 26px; border-radius: 5px; background: rgba(20,20,20,0.52); color: #fff; font-size: 15px; line-height: 26px; text-align: center; cursor: crosshair; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-scale-handle { position: absolute; bottom: 8px; right: 8px; z-index: 9; width: 24px; height: 24px; border-radius: 5px; background: rgba(20,20,20,0.52); color: #fff; font-size: 13px; line-height: 24px; text-align: center; cursor: nwse-resize; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-replace-handle { position: absolute; bottom: 8px; left: 8px; z-index: 9; width: 26px; height: 26px; border-radius: 5px; background: rgba(20,20,20,0.52); color: #fff; font-size: 13px; line-height: 26px; text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-frame-handle { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9; width: 26px; height: 26px; border-radius: 5px; background: rgba(20,20,20,0.52); color: #fff; font-size: 13px; line-height: 26px; text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-wrap { position: absolute; display: inline-block; }
+  .frame-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; object-fit: fill; z-index: 3; }
+  /* フレームテンプレート */
+  [data-frame="white"]    .board-img { border: 14px solid #fff; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+  [data-frame="polaroid"] .board-img { border: 14px solid #fff; border-bottom: 50px solid #fff; border-radius: 2px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+  [data-frame="black"]    .board-img { border: 14px solid #111; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+  [data-frame="gold"]     .board-img { border: 14px solid #c8a02e; border-radius: 4px; box-shadow: 0 0 0 3px #8b6a00, 0 4px 20px rgba(0,0,0,0.35); }
+  [data-frame="round"]    .board-img { border: 14px solid #fff; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+  [data-frame="vintage"]  .board-img { border: 14px solid #c8a978; border-radius: 2px; box-shadow: 0 0 0 3px #7a5c28, 0 4px 20px rgba(0,0,0,0.35); }
+  [data-frame="shadow"]   .board-img { border-radius: 4px; box-shadow: 0 0 0 6px rgba(255,255,255,0.9), 0 8px 40px rgba(0,0,0,0.45); }
+  [data-frame="double"]   .board-img { border: 6px solid #fff; border-radius: 4px; box-shadow: 0 0 0 2px #ddd, 0 0 0 14px #fff, 0 0 0 16px #ccc, 0 4px 20px rgba(0,0,0,0.25); }
+  /* フレームモーダル */
+  #frame-modal { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #frame-modal.visible { display: flex; }
+  .frame-card { background: #fff; border-radius: 16px; padding: 24px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px; }
+  .frame-card h3 { font-size: 15px; color: #333; }
+  .frame-section-title { font-size: 11px; font-weight: 700; color: #3d8b41; text-transform: uppercase; letter-spacing: 0.06em; }
+  .frame-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .frame-thumb { border: 2px solid #eee; border-radius: 8px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: border-color 0.12s, background 0.12s; }
+  .frame-thumb:hover { border-color: #3d8b41; background: #f5fbf5; }
+  .frame-thumb.active { border-color: #3d8b41; background: #e8f5e9; }
+  .frame-preview { width: 56px; height: 40px; background: #c8ddc8; border-radius: 4px; flex-shrink: 0; }
+  .frame-label { font-size: 10px; color: #666; text-align: center; }
+  .frame-custom-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .frame-custom-item { position: relative; border: 2px solid #eee; border-radius: 8px; cursor: pointer; overflow: hidden; aspect-ratio: 1; transition: border-color 0.12s; }
+  .frame-custom-item:hover { border-color: #3d8b41; }
+  .frame-custom-item.active { border-color: #3d8b41; }
+  .frame-custom-item img { width: 100%; height: 100%; object-fit: cover; }
+  .frame-custom-item .frame-del { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: rgba(229,57,53,0.85); border-radius: 50%; font-size: 9px; color: #fff; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.12s; border: none; cursor: pointer; line-height: 1; }
+  .frame-custom-item:hover .frame-del { opacity: 1; }
+  .btn-upload-frame { background: #f0f7f0; border: 1.5px dashed #b2cfb3; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 12px; color: #3d8b41; font-weight: 600; font-family: inherit; width: 100%; transition: background 0.12s; }
+  .btn-upload-frame:hover { background: #dff0df; }
+  .img-wrap:hover .img-rotate-handle,
+  .img-wrap:hover .img-scale-handle,
+  .img-wrap:hover .img-replace-handle,
+  .img-wrap:hover .img-frame-handle { opacity: 1; }
+  .btn-rotate-card { background: none; border: none; cursor: crosshair; font-size: 12px; color: #ccc; padding: 2px 3px; line-height: 1; border-radius: 3px; transition: color 0.12s; touch-action: none; user-select: none; }
+  .btn-rotate-card:hover { color: #888; background: rgba(0,0,0,0.06); }
+  .card-scale-handle { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; cursor: nwse-resize; opacity: 0; z-index: 11; user-select: none; border-radius: 0 0 3px 0; }
+  .card:hover .card-scale-handle { opacity: 1; background: rgba(0,0,0,0.15); }
+  .img-uploading { position: absolute; inset: 0; background: rgba(255,255,255,0.75); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #3d8b41; font-weight: 700; gap: 8px; }
+  #dropzone { position: absolute; left: 120px; top: 80px; width: 600px; height: 380px; border: 2px dashed #b2cfb3; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 12px; background: rgba(255,255,255,0.6); z-index: 1; }
+  #dropzone:hover { border-color: #3d8b41; background: rgba(200,230,200,0.4); }
+  #dropzone .icon { font-size: 52px; opacity: 0.35; }
+  #dropzone .label { color: #7aaa7d; font-size: 14px; font-weight: 600; }
+  #dropzone .sub { color: #aac8ab; font-size: 11px; }
+  .pin-dot { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.22); transform: translate(-50%, -50%); pointer-events: none; z-index: 5; background: #3d8b41; }
+  .pin-dot.featured { background: #ff8f00; }
+  .pin-dot.pending { background: #aaa; animation: blink 0.8s infinite; }
+  .card { position: absolute; width: 188px; border-radius: 3px; box-shadow: 2px 4px 12px rgba(0,0,0,0.13); cursor: grab; user-select: none; z-index: 10; font-family: 'Noto Sans JP', sans-serif; transition: box-shadow 0.2s; }
+  .card:active { cursor: grabbing; }
+  .card-tape { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 40px; height: 20px; background: rgba(255,255,255,0.55); border-radius: 2px; border: 1px solid rgba(0,0,0,0.07); }
+  /* カード上部ボタンエリア */
+  .card-top-btns { position: absolute; top: 4px; right: 4px; z-index: 12; display: flex; gap: 2px; align-items: center; }
+  .btn-collapse-card { background: none; border: none; cursor: pointer; font-size: 9px; color: #ccc; padding: 2px 4px; line-height: 1; border-radius: 3px; transition: color 0.12s, transform 0.15s; }
+  .btn-collapse-card:hover { color: #888; background: rgba(0,0,0,0.06); }
+  .card.collapsed .btn-collapse-card { transform: rotate(-90deg); }
+  .btn-close-card { background: none; border: none; cursor: pointer; font-size: 11px; color: #ddd; padding: 2px 3px; line-height: 1; border-radius: 3px; font-family: inherit; transition: color 0.12s, background 0.12s; }
+  .btn-close-card:hover { color: #e53935; background: rgba(229,57,53,0.08); }
+  .card-collapsed-strip { display: none; padding: 8px 52px 6px 10px; font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; border-radius: 3px; }
+  .card.collapsed .card-body { display: none; }
+  .card.collapsed .card-collapsed-strip { display: block; }
+  .card-body { padding: 18px 11px 9px; }
+  .card-text { font-size: 12px; color: #333; line-height: 1.65; min-height: 32px; }
+  .card-img-wrap { margin: 7px 0 2px; border-radius: 5px; overflow: hidden; display: none; }
+  .card-img-wrap img { width: 100%; display: block; border-radius: 5px; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .card-time { font-size: 9px; color: #999; }
+  .card-actions { display: flex; gap: 6px; align-items: center; }
+  .badge-featured { font-size: 9px; background: #ff8f00; color: #fff; border-radius: 10px; padding: 1px 6px; }
+  .btn-wavy { background: rgba(61,139,65,0.1); border: none; border-radius: 12px; padding: 4px 9px; cursor: pointer; font-size: 11px; color: #3d8b41; font-family: inherit; font-weight: 700; transition: background 0.12s, transform 0.1s; }
+  .btn-wavy:hover { background: rgba(61,139,65,0.22); }
+  @keyframes wave-pop { 0%,100%{transform:scale(1)} 40%{transform:scale(1.18)} 70%{transform:scale(0.94)} }
+  .btn-wavy.pop { animation: wave-pop 0.3s ease; }
+  .btn-attach { background: rgba(0,0,0,0.06); border: none; border-radius: 10px; padding: 3px 7px; cursor: pointer; font-size: 11px; color: #888; font-family: inherit; line-height: 1; }
+  .btn-attach:hover { background: rgba(0,0,0,0.12); }
+  .btn-expand { width: 100%; background: rgba(0,0,0,0.05); border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px; color: #888; font-family: inherit; margin-top: 7px; text-align: left; transition: background 0.12s; }
+  .btn-expand:hover { background: rgba(0,0,0,0.1); color: #555; }
+  .btn-expand.has-replies { color: #3d8b41; font-weight: 700; }
+  .card-replies { display: none; margin-top: 8px; border-top: 1px solid rgba(0,0,0,0.09); padding-top: 8px; }
+  .replies-list { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 7px; }
+  .reply-item { background: rgba(255,255,255,0.55); border-radius: 4px; padding: 5px 7px; }
+  .reply-text { font-size: 11px; color: #444; display: block; line-height: 1.45; }
+  .reply-time { font-size: 9px; color: #bbb; display: block; margin-top: 2px; }
+  .reply-input-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .reply-input { width: 100%; background: rgba(255,255,255,0.6); border: 1px solid rgba(0,0,0,0.1); border-radius: 4px; padding: 5px 7px; font-size: 11px; font-family: inherit; resize: none; outline: none; color: #333; user-select: text !important; cursor: text; }
+  .btn-reply-post { background: rgba(61,139,65,0.13); border: none; border-radius: 4px; padding: 4px 0; cursor: pointer; font-size: 10px; color: #3d8b41; font-weight: 700; font-family: inherit; transition: background 0.12s; }
+  .btn-reply-post:hover { background: rgba(61,139,65,0.25); }
+  #input-card { position: absolute; width: 204px; border-radius: 3px; box-shadow: 4px 8px 20px rgba(0,0,0,0.16); padding: 18px 11px 12px; z-index: 50; display: none; font-family: 'Noto Sans JP', sans-serif; }
+  #input-card .card-tape { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 40px; height: 20px; background: rgba(255,255,255,0.55); border-radius: 2px; border: 1px solid rgba(0,0,0,0.07); }
+  #input-hint { font-size: 10px; color: #888; margin-bottom: 8px; }
+  #comment-input { width: 100%; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.1); border-radius: 4px; padding: 8px; font-size: 12px; font-family: inherit; resize: none; outline: none; color: #333; }
+  #input-btns { display: flex; gap: 6px; margin-top: 8px; }
+  #btn-post { flex: 1; background: #3d8b41; border: none; border-radius: 4px; padding: 6px 0; cursor: pointer; font-size: 11px; color: #fff; font-weight: 700; font-family: inherit; }
+  #btn-post:hover { background: #4caf50; }
+  #btn-cancel { background: rgba(0,0,0,0.07); border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 11px; color: #666; font-family: inherit; }
+  #btn-cancel:hover { background: rgba(0,0,0,0.13); }
+  #featured-bar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.93); border: 1px solid rgba(61,139,65,0.3); border-radius: 12px; padding: 8px 18px; display: none; gap: 16px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 80%; flex-wrap: wrap; z-index: 150; font-size: 11px; }
+  #featured-bar .featured-label { color: #3d8b41; font-weight: 800; white-space: nowrap; }
+  #board-panel { position: fixed; top: 52px; right: 0; width: 270px; height: calc(100vh - 52px); background: #fff; border-left: 1px solid #dde8dd; box-shadow: -4px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); z-index: 300; }
+  #board-panel.open { transform: translateX(0); }
+  #board-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  #rank-section { display: flex; flex-direction: column; border-top: 2px solid #eef3ee; min-height: 0; flex: 1; }
+  #rank-section-header { display: flex; align-items: center; padding: 8px 14px; gap: 6px; flex-shrink: 0; }
+  #rank-section-title { flex: 1; font-weight: 700; font-size: 12px; color: #3d8b41; }
+  #rank-list { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .rank-item { display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border-radius: 7px; border: 1px solid #eee; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+  .rank-item:hover { background: #f5fbf5; border-color: #b2d4b3; }
+  .rank-badge { font-size: 13px; font-weight: 800; color: #3d8b41; flex-shrink: 0; min-width: 32px; text-align: center; background: #f0f7f0; border-radius: 6px; padding: 3px 5px; }
+  .rank-badge.gold   { background: #fff8e1; color: #f9a825; }
+  .rank-badge.silver { background: #f5f5f5; color: #757575; }
+  .rank-badge.bronze { background: #fbe9e7; color: #bf360c; }
+  .rank-body { flex: 1; min-width: 0; }
+  .rank-comment { font-size: 12px; color: #333; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .rank-meta { font-size: 10px; color: #bbb; margin-top: 3px; }
+  .rank-empty { padding: 32px 16px; text-align: center; color: #bbb; font-size: 12px; line-height: 1.8; }
+  #btn-rank { height: 26px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: background 0.12s; }
+  #btn-rank:hover { background: #dff0df; }
+  #btn-rank.active { background: #e8f5e9; border-color: #3d8b41; }
+  .panel-header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid #eee; gap: 8px; flex-shrink: 0; }
+  .panel-title { flex: 1; font-weight: 700; font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn-new-board { background: #3d8b41; color: #fff; border: none; border-radius: 5px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-new-board:hover { background: #4caf50; }
+  .btn-icon { background: none; border: none; cursor: pointer; color: #bbb; font-size: 16px; padding: 2px 5px; border-radius: 4px; line-height: 1; transition: color 0.12s, background 0.12s; }
+  .btn-icon:hover { color: #555; background: #f0f0f0; }
+  .btn-pin { background: none; border: none; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 4px; line-height: 1; color: #ccc; transition: color 0.12s, background 0.12s; }
+  .btn-pin:hover { color: #888; background: #f0f0f0; }
+  .btn-pin.pinned { color: #3d8b41; background: #e8f5e9; }
+  .panel-pinned { box-shadow: -4px 0 20px rgba(0,0,0,0.1), 0 0 0 2px #3d8b41 inset !important; }
+  .board-item { display: flex; align-items: center; padding: 9px 10px; border-radius: 7px; border: 1.5px solid #e8e8e8; cursor: pointer; gap: 8px; transition: background 0.12s, border-color 0.12s; min-width: 0; }
+  .board-item:hover { background: #f5fbf5; border-color: #b2d4b3; }
+  .board-item.active { background: #e8f5e9; border-color: #3d8b41; }
+  .board-tree-ind { color: #ccc; font-size: 11px; flex-shrink: 0; margin-right: 2px; }
+  .board-item-icon { flex-shrink: 0; display: flex; align-items: center; }
+  .board-item-icon svg { display: block; }
+  .board-item-info { flex: 1; min-width: 0; }
+  .board-item-name { font-size: 12px; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .board-item.active .board-item-name { color: #2e6b31; }
+  .board-item-meta { font-size: 10px; color: #aaa; margin-top: 1px; }
+  .board-item.mine { border-color: #b2d4b3; background: #f5fbf5; }
+  .board-item.mine .board-item-name::after { content: ' ★'; font-size: 9px; color: #3d8b41; }
+  .board-creator { font-size: 9px; color: #bbb; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-creator.me { color: #3d8b41; font-weight: 600; }
+  .btn-board-del { background: none; border: none; cursor: pointer; color: #ddd; font-size: 12px; padding: 3px 4px; border-radius: 4px; flex-shrink: 0; transition: color 0.12s, background 0.12s; line-height: 1; }
+  .btn-board-del:hover { color: #e53935; background: #ffebee; }
+  #img-panel { position: fixed; top: 52px; left: 0; width: 240px; height: calc(100vh - 52px); background: #fff; border-right: 1px solid #dde8dd; box-shadow: 4px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); z-index: 290; }
+  #img-panel.open { transform: translateX(0); }
+  #img-panel-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #img-panel-empty { padding: 24px 16px; text-align: center; color: #bbb; font-size: 12px; line-height: 1.6; }
+  .img-panel-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; border: 1px solid #e8e8e8; background: #fafafa; transition: border-color 0.12s; }
+  .img-panel-item:hover { border-color: #c5dcc5; }
+  .img-panel-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 1px solid #e0e0e0; }
+  .img-panel-label { flex: 1; font-size: 12px; color: #444; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .img-toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+  .img-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ddd; border-radius: 10px; transition: background 0.2s; }
+  .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .img-toggle-switch input:checked + .toggle-slider { background: #3d8b41; }
+  .img-toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.88); color: #fff; border-radius: 8px; padding: 9px 18px; font-size: 12px; z-index: 500; display: none; white-space: nowrap; }
+  #toast.visible { display: block; }
+  @keyframes blink { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+  /* ── 通報ボタン ── */
+  .img-report-handle { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 9; width: 26px; height: 26px; border-radius: 5px; background: rgba(180,30,30,0.75); color: #fff; font-size: 13px; line-height: 26px; text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.16s; user-select: none; }
+  .img-wrap:hover .img-report-handle { opacity: 1; }
+  .btn-board-report { background: none; border: none; cursor: pointer; color: #ddd; font-size: 13px; padding: 3px 4px; border-radius: 4px; flex-shrink: 0; transition: color 0.12s, background 0.12s; line-height: 1; }
+  .btn-board-report:hover { color: #e53935; background: #ffebee; }
+  #report-modal { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.52); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #report-modal.visible { display: flex; }
+  .report-card { background: #fff; border-radius: 12px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); font-family: 'Noto Sans JP','Hiragino Sans',sans-serif; }
+  .report-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; border-bottom: 1px solid #f0f0f0; }
+  .report-card-title { font-size: 14px; font-weight: 700; color: #1a1a1a; margin: 0; }
+  .btn-report-close { background: none; border: none; font-size: 16px; color: #999; cursor: pointer; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+  .report-card-body { padding: 14px 18px 18px; }
+  .report-desc { font-size: 11px; color: #888; margin: 0 0 14px; line-height: 1.65; }
+  .report-reason-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+  .report-reason-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid #e0e0e0; border-radius: 7px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+  .report-reason-item:hover { background: #fafafa; }
+  .report-reason-item.selected { border-color: #e53935; background: #fff5f5; }
+  .report-reason-item input[type=radio] { margin-top: 2px; flex-shrink: 0; accent-color: #e53935; }
+  .report-reason-label { font-size: 12px; font-weight: 600; color: #222; margin-bottom: 1px; }
+  .report-reason-sub { font-size: 10px; color: #999; }
+  .report-note-ta { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 11px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; outline: none; color: #333; font-family: inherit; margin-bottom: 12px; display: none; }
+  .report-footer { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-report-cancel { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 7px 16px; font-size: 12px; cursor: pointer; color: #555; font-family: inherit; }
+  .btn-report-submit { background: #e53935; border: none; border-radius: 6px; padding: 7px 16px; font-size: 12px; font-weight: 700; cursor: pointer; color: #fff; font-family: inherit; }
+  .btn-report-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+  .report-result { padding: 32px 18px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .report-result-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+  .report-result-icon.ok { background: #e8f5e9; color: #2e7d32; }
+  .report-result-icon.dup { background: #fff3e0; color: #e65100; }
+  .report-result-title { font-size: 14px; font-weight: 700; color: #1a1a1a; margin: 0; }
+  .report-result-desc { font-size: 11px; color: #666; line-height: 1.6; margin: 0; }
+
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+
+  <div id="form-login" class="auth-card" style="display:none">
+    <div class="auth-logo"><div class="auth-logo-icon">&#12316;</div><div class="auth-logo-text">WAVE</div></div>
+    <h2 class="auth-title">ログイン</h2>
+    <div class="auth-field"><label>メールアドレス</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="auth-field"><label>パスワード</label><input type="password" id="login-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
+    <div id="login-error" class="auth-error"></div>
+    <button id="btn-login" class="auth-btn">ログイン</button>
+    <hr class="auth-divider">
+    <p class="auth-switch">アカウントがない方 → <a id="to-register">新規登録</a></p>
+  </div>
+  <div id="form-register" class="auth-card" style="display:none">
+    <div class="auth-logo"><div class="auth-logo-icon">&#12316;</div><div class="auth-logo-text">WAVE</div></div>
+    <h2 class="auth-title">新規登録</h2>
+    <div class="auth-field"><label>メールアドレス</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="auth-field"><label>パスワード <span style="color:#bbb;font-weight:400">(6文字以上)</span></label><input type="password" id="reg-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="new-password"></div>
+    <div id="reg-error" class="auth-error"></div>
+    <div id="reg-success" class="auth-success" style="display:none"></div>
+    <button id="btn-register" class="auth-btn">登録する</button>
+    <hr class="auth-divider">
+    <p class="auth-switch">既にアカウントをお持ちの方 → <a id="to-login">ログイン</a></p>
+  </div>
+</div>
+
+<!-- SETUP MODAL -->
+<div id="setup-modal">
+  <div class="setup-card">
+    <div class="auth-logo"><div class="auth-logo-icon">&#12316;</div><div class="auth-logo-text">WAVE</div></div>
+    <h2>🗄 データベースのセットアップが必要です</h2>
+    <p>Supabase ダッシュボードの <strong>SQL Editor</strong> で以下の SQL を実行してください。</p>
+    <div class="setup-step">STEP 1 — テーブルを作成</div>
+    <div class="setup-sql">-- boards
+create table if not exists boards (
+  id bigint primary key,
+  user_id uuid references auth.users not null,
+  name text not null default 'ボード',
+  parent_id bigint references boards(id) on delete set null,
+  color_idx int default 0,
+  created_at timestamptz default now()
+);
+alter table boards enable row level security;
+create policy "users own boards" on boards
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- images
+create table if not exists images (
+  id bigint primary key,
+  board_id bigint references boards(id) on delete cascade not null,
+  user_id uuid references auth.users not null,
+  storage_path text not null,
+  x float default 0,
+  y float default 0,
+  visible boolean default true,
+  created_at timestamptz default now()
+);
+alter table images enable row level security;
+create policy "users own images" on images
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- pins
+create table if not exists pins (
+  id bigint primary key,
+  board_id bigint references boards(id) on delete cascade not null,
+  image_id bigint references images(id) on delete cascade not null,
+  user_id uuid references auth.users not null,
+  pin_x float, pin_y float, card_x float, card_y float,
+  comment text, likes int default 0, featured boolean default false,
+  time text, color text, rotate float,
+  card_hidden boolean default false,
+  attachment_path text,
+  created_at timestamptz default now()
+);
+alter table pins enable row level security;
+create policy "users own pins" on pins
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- replies
+create table if not exists replies (
+  id bigint primary key,
+  pin_id bigint references pins(id) on delete cascade not null,
+  user_id uuid references auth.users not null,
+  comment text, time text,
+  created_at timestamptz default now()
+);
+alter table replies enable row level security;
+create policy "users own replies" on replies
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);</div>
+    <div class="setup-step">STEP 2 — Storage バケットを作成</div>
+    <div class="setup-sql">-- Storageダッシュボード → New bucket → 名前: wave-images → Public ON
+-- または SQL Editor で:
+insert into storage.buckets (id, name, public)
+values ('wave-images', 'wave-images', true)
+on conflict do nothing;
+
+create policy "users upload" on storage.objects for insert
+  with check (bucket_id = 'wave-images'
+    and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "public read" on storage.objects for select
+  using (bucket_id = 'wave-images');
+create policy "users delete" on storage.objects for delete
+  using (bucket_id = 'wave-images'
+    and auth.uid()::text = (storage.foldername(name))[1]);</div>
+    <button id="btn-setup-done">✓ 設定が完了しました — 再読み込み</button>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div id="help-modal">
+  <div class="help-card">
+    <h2>🌊 Wave の使い方</h2>
+
+    <div class="help-section">
+      <h3>画像を追加する</h3>
+      <div class="help-row"><div class="help-icon">🖼</div><div>ツールバーの <strong>「+ 画像」</strong> をタップして写真をアップロード。<br>複数枚追加できます。</div></div>
+    </div>
+
+    <div class="help-section">
+      <h3>コメントを貼る</h3>
+      <div class="help-row"><div class="help-icon">📍</div><div>画像の気になる場所を <strong>タップ</strong> するとコメント入力欄が開きます。<br>入力して「貼る」を押すと付箋が貼られます。</div></div>
+      <div class="help-row"><div class="help-icon">💬</div><div>付箋の <strong>「返信する」</strong> から返信を追加できます。</div></div>
+      <div class="help-row"><div class="help-icon">〜</div><div>付箋の <strong>「〜」ボタン</strong> を押すと Wavy（共感）を送れます。3つ集まると注目マークが付きます。</div></div>
+    </div>
+
+    <div class="help-section">
+      <h3>画面を動かす</h3>
+      <div class="help-row"><div class="help-icon">🤏</div><div><strong>ピンチイン / アウト</strong> でズーム（スマホ）</div></div>
+      <div class="help-row"><div class="help-icon">👆</div><div>画像以外の場所を <strong>ドラッグ</strong> でスクロール（スマホ）</div></div>
+      <div class="help-row"><div class="help-icon">🖱</div><div><strong>スクロール</strong> でズーム、<strong>スペース + ドラッグ</strong> でパン（PC）</div></div>
+      <div class="help-row"><div class="help-icon">↺</div><div>ツールバーの <strong>「↺」</strong> で最初の表示位置に戻ります。</div></div>
+    </div>
+
+    <div class="help-section">
+      <h3>ボードを整理する</h3>
+      <div class="help-row"><div class="help-icon">📋</div><div>ツールバーの <strong>📋</strong> でボード一覧を開き、ボードを切り替えたり新しく作れます。</div></div>
+      <div class="help-row"><div class="help-icon">⊕</div><div><strong>⊕</strong> で現在のボードの子ボードを作成できます。</div></div>
+    </div>
+
+    <div class="help-tip">💡 画像の左上に表示される <strong>⠿</strong> をドラッグすると画像を移動できます。</div>
+
+    <button id="btn-help-close">はじめる →</button>
+  </div>
+</div>
+
+<!-- FRAME MODAL -->
+<div id="frame-modal">
+  <div class="frame-card">
+    <h3>🖼 フレームを選択</h3>
+    <div class="frame-section-title">テンプレート</div>
+    <div class="frame-grid" id="frame-template-grid"></div>
+    <div class="frame-section-title">カスタムフレーム</div>
+    <div class="frame-custom-grid" id="frame-custom-grid"></div>
+    <button class="btn-upload-frame" id="btn-upload-frame">＋ カスタムフレームをアップロード</button>
+    <input id="frame-file-input" type="file" accept="image/*" style="display:none">
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-overlay"><div class="spinner"></div><span id="loading-text">読み込み中...</span></div>
+
+<!-- MAIN APP -->
+<div id="main-app">
+  <div id="toolbar">
+    <div class="logo"><div class="logo-icon">&#12316;</div><div class="logo-text">WAVE</div></div>
+    <div class="divider"></div>
+    <button class="btn-primary" id="btn-add-img">+ 画像</button>
+    <input id="file-input" type="file" accept="image/*" style="display:none">
+    <div class="divider"></div>
+    <div id="bc-wrap">
+      <div id="bc-ancestors"></div>
+      <input id="board-name-input" type="text" value="ボード 1">
+    </div>
+    <button id="btn-add-child" title="子ボードを追加">&#8853;</button>
+    <button id="btn-boards" title="ボード一覧">&#128203; <span id="board-count">1</span></button>
+    <div class="divider"></div>
+    <div id="toggle-group">
+      <button id="btn-toggle-pins" class="btn-layer" title="ピン表示切替">📍</button>
+      <button id="btn-toggle-lines" class="btn-layer" title="線表示切替">〜</button>
+      <button id="btn-toggle-cards" class="btn-layer" title="カード表示切替">🗒</button>
+    </div>
+    <button id="btn-img-panel" title="画像一覧">🖼</button>
+    <div class="spacer"></div>
+    <div class="zoom-controls">
+      <button class="btn-zoom" id="btn-zoomin">+</button>
+      <span id="zoom-label">100%</span>
+      <button class="btn-zoom" id="btn-zoomout">−</button>
+      <button class="btn-reset" id="btn-reset">↺</button>
+    </div>
+    <div class="divider"></div>
+    <button id="btn-help" title="使い方">?</button>
+    <div id="user-info">
+      <span id="user-email" title="ログイン中のアカウント"></span>
+      <button id="btn-logout" title="ログアウト">⏻</button>
+    </div>
+  </div>
+
+  <div id="canvas">
+    <div id="world">
+      <svg id="connections-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="canvas-frame">
+        <div class="cf-icon">🖼</div>
+        <div class="cf-hint">好きな場所に画像をドラッグして配置してください</div>
+      </div>
+      <div id="dropzone" onclick="document.getElementById('file-input').click()">
+        <div class="icon">🌊</div>
+        <div class="label">クリックして画像をアップロード</div>
+        <div class="sub">JPG / PNG / WEBP</div>
+      </div>
+      <div id="input-card">
+        <div class="card-tape"></div>
+        <div id="input-hint">コメントを追加</div>
+        <textarea id="comment-input" rows="3" placeholder="ここについてコメント..."></textarea>
+        <div id="input-btns">
+          <button id="btn-post">貼る</button>
+          <button id="btn-cancel">✕</button>
+        </div>
+      </div>
+    </div>
+    <div id="featured-bar"><span class="featured-label">〜 Wavy</span></div>
+  </div>
+
+  <div id="board-panel">
+    <div class="panel-header" style="flex-wrap:wrap; row-gap:6px; flex-shrink:0;">
+      <span class="panel-title">📋 ボード一覧</span>
+      <button class="btn-pin" id="btn-pin-board" title="固定する">📌</button>
+      <button class="btn-icon" id="btn-close-panel">✕</button>
+      <button class="btn-new-board" id="btn-new-board" style="width:100%;">+ ルート新規</button>
+    </div>
+    <div id="board-list"></div>
+    <div id="rank-section">
+      <div id="rank-section-header">
+        <span id="rank-section-title">〜 Wavy ランク</span>
+      </div>
+      <div id="rank-list"></div>
+    </div>
+  </div>
+
+  <div id="img-panel">
+    <div class="panel-header">
+      <span class="panel-title">🖼 画像一覧</span>
+      <button class="btn-pin" id="btn-pin-img" title="固定する">📌</button>
+      <button class="btn-icon" id="btn-close-img-panel">✕</button>
+    </div>
+    <div id="img-panel-list"></div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div id="report-modal">
+  <div class="report-card">
+    <div class="report-card-header">
+      <h3 class="report-card-title" id="report-modal-title">🚨 通報する</h3>
+      <button class="btn-report-close" id="btn-report-close">✕</button>
+    </div>
+    <div id="report-card-content"></div>
+  </div>
+</div>
+
+<input id="attach-file-input" type="file" accept="image/*" style="display:none">
+<div id="toast"></div>
+
+<script>
+// ── Supabase config ──────────────────────────────────────────────────────────
+const SUPABASE_URL   = 'https://jcsezfsgzzfddxhbqcrh.supabase.co';
+const HARDCODED_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjc2V6ZnNnenpmZGR4aGJxY3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4OTM4MjgsImV4cCI6MjA5NTQ2OTgyOH0.3OBWNPSalqb359sdfkJSPh3c3A-4wMqctWF522EjiuE';
+const STORAGE_BUCKET = 'wave-images';
+
+let sbClient = null, currentUser = null;
+
+function getStoredKey() {
+  return HARDCODED_KEY;
+}
+function bootSupabase(key) {
+  sbClient = supabase.createClient(SUPABASE_URL, key);
+  sbClient.auth.onAuthStateChange((ev, session) => {
+    if (session && session.user) showApp(session.user);
+    else showAuthForm('login');
+  });
+}
+
+// ── Auth forms ───────────────────────────────────────────────────────────────
+const authScreen = document.getElementById('auth-screen');
+function showAuthScreen(formId) {
+  authScreen.style.display = 'flex';
+  document.getElementById('main-app').classList.remove('visible');
+  document.getElementById('form-login').style.display    = formId === 'login'     ? 'flex' : 'none';
+  document.getElementById('form-register').style.display = formId === 'register'  ? 'flex' : 'none';
+  ['login-error','reg-error'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ''; });
+  const rs = document.getElementById('reg-success'); if (rs) { rs.style.display = 'none'; rs.textContent = ''; }
+}
+function showAuthForm(form) {
+  showAuthScreen(form);
+  const m = { login: 'login-email', register: 'reg-email' };
+  if (m[form]) setTimeout(() => document.getElementById(m[form]).focus(), 80);
+}
+
+document.getElementById('btn-login').onclick = doLogin;
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const err   = document.getElementById('login-error');
+  const btn   = document.getElementById('btn-login');
+  err.textContent = '';
+  if (!email || !pass) { err.textContent = 'メールアドレスとパスワードを入力してください'; return; }
+  btn.disabled = true; btn.textContent = 'ログイン中...';
+  const { error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+  btn.disabled = false; btn.textContent = 'ログイン';
+  if (error) err.textContent = xlateErr(error.message);
+}
+document.getElementById('btn-register').onclick = doRegister;
+document.getElementById('reg-password').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+async function doRegister() {
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-password').value;
+  const err   = document.getElementById('reg-error');
+  const succ  = document.getElementById('reg-success');
+  const btn   = document.getElementById('btn-register');
+  err.textContent = ''; succ.style.display = 'none';
+  if (!email || !pass) { err.textContent = 'メールアドレスとパスワードを入力してください'; return; }
+  if (pass.length < 6) { err.textContent = 'パスワードは6文字以上にしてください'; return; }
+  btn.disabled = true; btn.textContent = '登録中...';
+  const { error } = await sbClient.auth.signUp({ email, password: pass });
+  btn.disabled = false; btn.textContent = '登録する';
+  if (error) err.textContent = xlateErr(error.message);
+  else { succ.textContent = '✓ 登録完了！確認メールをご確認ください。'; succ.style.display = 'block'; }
+}
+document.getElementById('to-register').onclick   = () => showAuthForm('register');
+document.getElementById('to-login').onclick       = () => showAuthForm('login');
+document.getElementById('btn-logout').onclick = () => sbClient.auth.signOut();
+
+function xlateErr(msg) {
+  if (!msg) return '不明なエラー';
+  if (msg.includes('Invalid login credentials')) return 'メールアドレスまたはパスワードが正しくありません';
+  if (msg.includes('Email not confirmed'))       return 'メールアドレスの確認が完了していません';
+  if (msg.includes('User already registered'))   return 'このメールアドレスは既に登録されています';
+  if (msg.includes('Password should be at least')) return 'パスワードは6文字以上にしてください';
+  if (msg.includes('rate limit') || msg.includes('429')) return 'しばらく時間をおいてから再試行してください';
+  return msg;
+}
+
+// ── Setup modal ──────────────────────────────────────────────────────────────
+const setupModal = document.getElementById('setup-modal');
+function showSetupModal() { setupModal.classList.add('visible'); }
+document.getElementById('btn-setup-done').onclick = () => location.reload();
+async function checkDBSetup() {
+  try {
+    const { error } = await sbClient.from('boards').select('id').limit(1);
+    if (error && (error.code === '42P01' || (error.message || '').includes('does not exist'))) {
+      showSetupModal(); return false;
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+// ── Loading / Toast ──────────────────────────────────────────────────────────
+const loadingOverlay = document.getElementById('loading-overlay');
+function showLoading(on, msg) {
+  document.getElementById('loading-text').textContent = msg || '読み込み中...';
+  loadingOverlay.classList.toggle('visible', on);
+}
+let toastTimer;
+function showToast(msg, ms) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('visible'), ms || 2400);
+}
+
+// ── App state ────────────────────────────────────────────────────────────────
+const COLORS = ["#fff9c4","#fce4ec","#e3f2fd","#e8f5e9","#f3e5f5","#fff3e0"];
+let boards = [], currentBoardId = null;
+let pins = [], images = [], colorIdx = 0;
+let showPins = true, showLines = true, showCards = true;
+let attachTargetPinId = null, pendingPin = null;
+let scale = 1, offsetX = 0, offsetY = 0;
+let isPanning = false, panStartX, panStartY, panOffX, panOffY;
+let spaceDown = false;
+
+const canvas       = document.getElementById('canvas');
+const world        = document.getElementById('world');
+const dropzone     = document.getElementById('dropzone');
+const inputCard    = document.getElementById('input-card');
+const commentInput = document.getElementById('comment-input');
+const featuredBar  = document.getElementById('featured-bar');
+const boardNameInput = document.getElementById('board-name-input');
+const boardPanel   = document.getElementById('board-panel');
+const connSvg      = document.getElementById('connections-svg');
+const attachInput  = document.getElementById('attach-file-input');
+const imgPanel     = document.getElementById('img-panel');
+const btnImgPanel  = document.getElementById('btn-img-panel');
+const canvasFrame  = document.getElementById('canvas-frame');
+
+// ── App boot ─────────────────────────────────────────────────────────────────
+async function showApp(user) {
+  currentUser = user;
+  authScreen.style.display = 'none';
+  document.getElementById('main-app').classList.add('visible');
+  document.getElementById('user-email').textContent = user.email;
+  boards = []; pins = []; images = []; colorIdx = 0; currentBoardId = null;
+  clearCanvas();
+  const ok = await checkDBSetup();
+  if (ok) { await init(); showHelpIfFirst(); }
+}
+
+function generateId() { return Date.now() + Math.floor(Math.random() * 9999); }
+
+async function init() {
+  showLoading(true, 'ボードを読み込み中...');
+  const { data, error } = await sbClient.from('boards')
+    .select('*').order('created_at');
+  if (error) { showLoading(false); showToast('読み込みエラー: ' + error.message); return; }
+
+  if (!data || data.length === 0) {
+    const b = await dbCreateBoard('ボード 1', null);
+    if (b) { boards = [b]; currentBoardId = b.id; pins = []; images = []; colorIdx = 0; updateBreadcrumb(); updateCanvasFrame(); renderBoardList(); dropzone.style.display = ''; }
+  } else {
+    boards = data.map(mapBoardRow);
+    const lastId = +localStorage.getItem('wave_last_board_' + currentUser.id) || 0;
+    const startId = (lastId && boards.find(b => b.id === lastId)) ? lastId : boards[0].id;
+    await switchToBoard(startId);
+  }
+  showLoading(false);
+}
+
+function mapBoardRow(r) {
+  return {
+    id: r.id, parentId: r.parent_id || null, name: r.name,
+    colorIdx: r.color_idx || 0,
+    userId: r.user_id, createdByEmail: r.created_by_email || '',
+  };
+}
+
+// ── DB helpers ───────────────────────────────────────────────────────────────
+async function dbCreateBoard(name, parentId) {
+  const id = generateId();
+  const { data, error } = await sbClient.from('boards').insert({
+    id, user_id: currentUser.id, name: name || 'ボード',
+    parent_id: parentId || null, color_idx: 0,
+    created_by_email: currentUser.email,
+  }).select().single();
+  if (error) { showToast('ボード作成エラー: ' + error.message); return null; }
+  return mapBoardRow(data);
+}
+async function dbUpdateBoard(id, fields) {
+  const m = {};
+  if (fields.name     !== undefined) m.name      = fields.name;
+  if (fields.colorIdx !== undefined) m.color_idx = fields.colorIdx;
+  await sbClient.from('boards').update(m).eq('id', id);
+}
+async function dbDeleteBoard(id) {
+  await sbClient.from('boards').delete().eq('id', id);
+}
+
+async function dbLoadBoardContent(boardId) {
+  const [imgRes, pinRes] = await Promise.all([
+    sbClient.from('images').select('*').eq('board_id', boardId).order('created_at'),
+    sbClient.from('pins').select('*, replies(*)').eq('board_id', boardId).order('created_at'),
+  ]);
+  const imgs = (imgRes.data || []).map(r => ({
+    id: r.id, boardId: r.board_id,
+    storageUrl: getPubUrl(r.storage_path), storagePath: r.storage_path,
+    x: r.x || 0, y: r.y || 0, visible: r.visible !== false,
+    imgScale: r.img_scale || 1, imgRotation: r.img_rotation || 0,
+    frameType: r.frame_type || 'none', frameUrl: r.frame_url || null,
+    userId: r.user_id, createdByEmail: r.created_by_email || '',
+    is_owner: r.user_id === currentUser.id,
+  }));
+  const ps = (pinRes.data || []).map(r => ({
+    id: r.id, boardId: r.board_id, imageId: r.image_id,
+    pinX: r.pin_x, pinY: r.pin_y, cardX: r.card_x, cardY: r.card_y,
+    comment: r.comment || '', likes: r.likes || 0, featured: r.featured || false,
+    time: r.time || '', color: r.color || COLORS[0], rotate: r.rotate || 0,
+    cardHidden: r.card_hidden || false, cardScale: r.card_scale || 1,
+    attachmentUrl: r.attachment_path ? getPubUrl(r.attachment_path) : null,
+    attachmentPath: r.attachment_path || null,
+    userId: r.user_id, createdByEmail: r.created_by_email || '',
+    replies: (r.replies || []).sort((a,b) => a.id - b.id).map(x => ({ id: x.id, comment: x.comment, time: x.time })),
+  }));
+  return { imgs, ps };
+}
+
+function getPubUrl(path) {
+  const { data } = sbClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function dbInsertImage(id, boardId, path, x, y) {
+  const { error } = await sbClient.from('images').insert({
+    id, board_id: boardId, user_id: currentUser.id, storage_path: path, x, y, visible: true,
+    created_by_email: currentUser.email,
+  });
+  if (error) showToast('画像保存エラー: ' + error.message);
+}
+async function dbUpdateImagePos(id, x, y) {
+  await sbClient.from('images').update({ x, y }).eq('id', id);
+}
+async function dbUpdateImageTransform(id, imgScale, imgRotation) {
+  await sbClient.from('images').update({ img_scale: imgScale, img_rotation: imgRotation }).eq('id', id);
+}
+async function dbReplaceImagePath(id, storagePath) {
+  await sbClient.from('images').update({ storage_path: storagePath }).eq('id', id);
+}
+async function dbUpdateImageFrame(id, frameType, frameUrl) {
+  await sbClient.from('images').update({ frame_type: frameType, frame_url: frameUrl || null }).eq('id', id);
+}
+async function dbLoadFrames() {
+  const { data } = await sbClient.from('frames').select('*').order('created_at');
+  return (data || []).map(r => ({ id: r.id, name: r.name, storagePath: r.storage_path, url: getPubUrl(r.storage_path) }));
+}
+async function dbInsertFrame(id, name, storagePath) {
+  await sbClient.from('frames').insert({ id, user_id: currentUser.id, name, storage_path: storagePath });
+}
+async function dbDeleteFrame(id) {
+  await sbClient.from('frames').delete().eq('id', id);
+}
+async function dbUpdateImageVisible(id, visible) {
+  await sbClient.from('images').update({ visible }).eq('id', id);
+}
+async function dbInsertPin(pin) {
+  const { error } = await sbClient.from('pins').insert({
+    id: pin.id, board_id: pin.boardId, image_id: pin.imageId, user_id: currentUser.id,
+    pin_x: pin.pinX, pin_y: pin.pinY, card_x: pin.cardX, card_y: pin.cardY,
+    comment: pin.comment, likes: pin.likes, featured: pin.featured,
+    time: pin.time, color: pin.color, rotate: pin.rotate,
+    card_hidden: pin.cardHidden, attachment_path: pin.attachmentPath || null,
+    created_by_email: currentUser.email,
+  });
+  if (error) showToast('ピン保存エラー: ' + error.message);
+}
+async function dbUpdatePin(id, fields) {
+  const m = {};
+  if (fields.cardX          !== undefined) m.card_x          = fields.cardX;
+  if (fields.cardY          !== undefined) m.card_y          = fields.cardY;
+  if (fields.likes          !== undefined) m.likes           = fields.likes;
+  if (fields.featured       !== undefined) m.featured        = fields.featured;
+  if (fields.cardHidden     !== undefined) m.card_hidden     = fields.cardHidden;
+  if (fields.attachmentPath !== undefined) m.attachment_path = fields.attachmentPath;
+  if (fields.cardScale      !== undefined) m.card_scale      = fields.cardScale;
+  if (fields.rotate         !== undefined) m.rotate          = fields.rotate;
+  const { error } = await sbClient.from('pins').update(m).eq('id', id);
+  if (error) showToast('ピン更新エラー: ' + error.message);
+}
+async function dbDeletePin(id) {
+  await sbClient.from('pins').delete().eq('id', id);
+}
+async function dbInsertReply(id, pinId, comment, time) {
+  const { error } = await sbClient.from('replies').insert({
+    id, pin_id: pinId, user_id: currentUser.id, comment, time,
+  });
+  if (error) showToast('返信保存エラー: ' + error.message);
+}
+
+// ── Storage upload ────────────────────────────────────────────────────────────
+async function uploadToStorage(file, path) {
+  const { data, error } = await sbClient.storage.from(STORAGE_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (error) { showToast('アップロードエラー: ' + error.message); return null; }
+  return data.path;
+}
+
+// ── SVG lines ────────────────────────────────────────────────────────────────
+function createConnectionLine(pin) {
+  if (connSvg.querySelector('[data-conn="' + pin.id + '"]')) return;
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('data-conn', pin.id);
+  line.setAttribute('stroke', 'rgba(75,125,80,0.4)');
+  line.setAttribute('stroke-width', '1.5');
+  line.setAttribute('stroke-dasharray', '5 3');
+  line.setAttribute('stroke-linecap', 'round');
+  connSvg.appendChild(line);
+  const imgObj = images.find(i => i.id === pin.imageId);
+  if (imgObj && !imgObj.visible) line.style.display = 'none';
+  updateLine(pin);
+}
+function updateLine(pin) {
+  const line = connSvg.querySelector('[data-conn="' + pin.id + '"]');
+  if (!line) return;
+  const imgObj = images.find(i => i.id === pin.imageId);
+  if (!imgObj) return;
+  const wrap = world.querySelector('.img-wrap[data-imgid="' + pin.imageId + '"]');
+  if (!wrap) return;
+  const imgEl = wrap.querySelector('.board-img');
+  const w = imgEl ? imgEl.offsetWidth : 0;
+  const h = imgEl ? imgEl.offsetHeight : 0;
+  if (!w || !h) return;
+  const x1 = imgObj.x + (pin.pinX / 100) * w;
+  const y1 = imgObj.y + (pin.pinY / 100) * h;
+  const cardEl = world.querySelector('.card[data-id="' + pin.id + '"]');
+  const cx = cardEl ? (parseFloat(cardEl.style.left) || pin.cardX) : pin.cardX;
+  const cy = cardEl ? (parseFloat(cardEl.style.top)  || pin.cardY) : pin.cardY;
+  line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+  line.setAttribute('x2', cx + 94); line.setAttribute('y2', cy);
+}
+function updateAllLines() { pins.forEach(p => updateLine(p)); }
+window.addEventListener('resize', updateAllLines);
+
+function updateCanvasFrame() { canvasFrame.classList.toggle('has-images', images.length > 0); }
+
+// ── Breadcrumb ────────────────────────────────────────────────────────────────
+function getBreadcrumb(boardId) {
+  const crumbs = []; let id = boardId;
+  while (id) {
+    const b = boards.find(b => b.id === id); if (!b) break;
+    crumbs.unshift(b); id = b.parentId || null;
+  }
+  return crumbs;
+}
+function updateBreadcrumb() {
+  const crumbs = getBreadcrumb(currentBoardId);
+  const anc = document.getElementById('bc-ancestors'); anc.innerHTML = '';
+  crumbs.slice(0, -1).forEach(b => {
+    const span = document.createElement('span'); span.className = 'crumb-link';
+    span.textContent = b.name; span.title = b.name;
+    span.addEventListener('click', () => switchToBoard(b.id));
+    anc.appendChild(span);
+    const sep = document.createElement('span'); sep.className = 'crumb-sep'; sep.textContent = '›';
+    anc.appendChild(sep);
+  });
+  const cur = crumbs[crumbs.length - 1];
+  if (cur) boardNameInput.value = cur.name;
+}
+
+// ── Board switch ──────────────────────────────────────────────────────────────
+function clearCanvas() {
+  world.querySelectorAll('.img-wrap, .card, .pin-dot').forEach(el => el.remove());
+  connSvg.innerHTML = '';
+  cancelPending();
+}
+
+async function switchToBoard(boardId, keepPanelOpen) {
+  if (boardId === currentBoardId) { if (!keepPanelOpen) closeBoardPanel(); return; }
+  showLoading(true, 'ボードを切り替え中...');
+  if (currentBoardId !== null) await dbUpdateBoard(currentBoardId, { colorIdx });
+  currentBoardId = boardId;
+  localStorage.setItem('wave_last_board_' + currentUser.id, boardId);
+  const board = boards.find(b => b.id === boardId);
+  colorIdx = board ? board.colorIdx || 0 : 0;
+  clearCanvas();
+  const { imgs, ps } = await dbLoadBoardContent(boardId);
+  images = imgs; pins = ps;
+  dropzone.style.display = images.length === 0 ? '' : 'none';
+  images.forEach(img => renderImage(img));
+  pins.forEach(pin => addCard(pin));
+  restoreZoom(boardId);
+  offsetX = 0; offsetY = 0;
+  applyTransform();
+  centerOnFirstImage();
+  updateFeaturedBar(); updateBreadcrumb(); updateCanvasFrame(); renderBoardList();
+  if (imgPanel.classList.contains('open')) renderImgPanel();
+  if (!keepPanelOpen) closeBoardPanel();
+  showLoading(false);
+}
+
+async function deleteBoard(boardId) {
+  const board = boards.find(b => b.id === boardId); if (!board) return;
+  const children = boards.filter(b => b.parentId === boardId);
+  if (children.length > 0) { alert('子ボードが ' + children.length + ' 件あります。先に削除してください。'); return; }
+  const rootCount = boards.filter(b => !b.parentId).length;
+  if (!board.parentId && rootCount <= 1) { alert('最後のルートボードは削除できません'); return; }
+  const isOwn = board.userId === currentUser.id;
+  const creator = board.createdByEmail || '他のユーザー';
+  if (!isOwn) {
+    const ok = confirm('⚠️ このボードは ' + creator + ' が作成しました。\n本当に削除しますか？\n（元に戻せません）');
+    if (!ok) return;
+  } else {
+    const ok = confirm('「' + board.name + '」を削除しますか？（元に戻せません）');
+    if (!ok) return;
+  }
+  await dbDeleteBoard(boardId);
+  const idx = boards.findIndex(b => b.id === boardId);
+  boards.splice(idx, 1);
+  if (boardId === currentBoardId) {
+    const sib = boards.filter(b => (b.parentId || null) === (board.parentId || null));
+    const next = sib[0] || boards[0];
+    currentBoardId = null;
+    await switchToBoard(next.id, true);
+  } else { renderBoardList(); }
+}
+
+// ── Board panel ───────────────────────────────────────────────────────────────
+let boardPanelPinned = false;
+let imgPanelPinned   = false;
+
+function setPinState(panel, btn, pinned) {
+  btn.classList.toggle('pinned', pinned);
+  btn.title = pinned ? '固定を解除' : '固定する';
+  panel.classList.toggle('panel-pinned', pinned);
+}
+
+function openBoardPanel()  { renderBoardList(); renderRankPanel(); boardPanel.classList.add('open'); }
+function closeBoardPanel() { if (boardPanelPinned) return; boardPanel.classList.remove('open'); }
+
+function renderBoardList() {
+  const list = document.getElementById('board-list'); list.innerHTML = '';
+  function renderLevel(parentId, depth) {
+    boards.filter(b => (b.parentId || null) === (parentId || null)).forEach(board => {
+      const isCur  = board.id === currentBoardId;
+      const isOwn  = board.userId === currentUser.id;
+      const hasChildren = boards.some(b => b.parentId === board.id);
+      const creatorLabel = isOwn
+        ? 'あなたが作成'
+        : (board.createdByEmail || '他のユーザー');
+      const boardColor = isCur ? '#2e6b31' : '#6aaa6e';
+      const boardFill  = isCur ? '#dff0df' : '#f0f7f0';
+      const icon = hasChildren
+        ? `<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="18" height="12" rx="2" fill="${boardFill}" stroke="${boardColor}" stroke-width="1.4"/>
+            <line x1="2" y1="7" x2="20" y2="7" stroke="${boardColor}" stroke-width="1.4"/>
+            <line x1="5" y1="10.5" x2="17" y2="10.5" stroke="${boardColor}" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+            <line x1="5" y1="13" x2="13" y2="13" stroke="${boardColor}" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+            <line x1="11" y1="16" x2="11" y2="19" stroke="${boardColor}" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="7.5" y1="19" x2="14.5" y2="19" stroke="${boardColor}" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="17" cy="5.5" r="3.5" fill="#3d8b41" stroke="#fff" stroke-width="1.2"/>
+            <line x1="17" y1="4" x2="17" y2="7" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+            <line x1="15.5" y1="5.5" x2="18.5" y2="5.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+           </svg>`
+        : `<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="18" height="12" rx="2" fill="${boardFill}" stroke="${boardColor}" stroke-width="1.4"/>
+            <line x1="2" y1="7" x2="20" y2="7" stroke="${boardColor}" stroke-width="1.4"/>
+            <line x1="5" y1="10.5" x2="17" y2="10.5" stroke="${boardColor}" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+            <line x1="5" y1="13" x2="13" y2="13" stroke="${boardColor}" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+            <line x1="11" y1="16" x2="11" y2="19" stroke="${boardColor}" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="7.5" y1="19" x2="14.5" y2="19" stroke="${boardColor}" stroke-width="1.4" stroke-linecap="round"/>
+           </svg>`;
+      const item = document.createElement('div');
+      item.className = 'board-item' + (isCur ? ' active' : '') + (isOwn && !isCur ? ' mine' : '');
+      item.style.paddingLeft = (10 + depth * 14) + 'px';
+      const treeInd = depth > 0 ? '<span class="board-tree-ind">└</span>' : '';
+      item.innerHTML = treeInd +
+        '<div class="board-item-icon">' + icon + '</div>' +
+        '<div class="board-item-info">' +
+          '<div class="board-item-name">' + escHtml(board.name) + '</div>' +
+          '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件' : '') + '</div>' +
+          '<div class="board-creator' + (isOwn ? ' me' : '') + '">' + escHtml(creatorLabel) + '</div>' +
+        '</div>' +
+        '<button class="btn-board-report" data-id="' + board.id + '" title="このボードを通報する">🚩</button>' +
+        '<button class="btn-board-del" data-id="' + board.id + '">✕</button>';
+      item.addEventListener('click', e => {
+        if (e.target.closest('.btn-board-del')) deleteBoard(board.id);
+        else if (e.target.closest('.btn-board-report')) { e.stopPropagation(); openReportModal('board', board.id); }
+        else switchToBoard(board.id);
+      });
+      list.appendChild(item);
+      renderLevel(board.id, depth + 1);
+    });
+  }
+  renderLevel(null, 0);
+  document.getElementById('board-count').textContent = boards.length;
+}
+
+// ── Image upload ──────────────────────────────────────────────────────────────
+document.getElementById('btn-add-img').onclick = () => document.getElementById('file-input').click();
+document.getElementById('file-input').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  await handleImageUpload(file);
+});
+canvas.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+canvas.addEventListener('drop', async e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  await handleImageUpload(file, e);
+});
+
+async function handleImageUpload(file, dropEvent) {
+  const ext   = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const imgId = generateId();
+  const path  = currentUser.id + '/' + imgId + '.' + ext;
+  const cr    = canvas.getBoundingClientRect();
+  let spawnX, spawnY;
+  if (dropEvent) {
+    spawnX = Math.round((dropEvent.clientX - cr.left - offsetX) / scale - 350);
+    spawnY = Math.round((dropEvent.clientY - cr.top  - offsetY) / scale - 250);
+  } else {
+    spawnX = Math.max(0, Math.round((cr.width  / 2 - offsetX) / scale - 350));
+    spawnY = Math.max(0, Math.round((cr.height / 2 - offsetY) / scale - 250));
+  }
+  const blobUrl = URL.createObjectURL(file);
+  const imgObj = { id: imgId, boardId: currentBoardId, storageUrl: blobUrl, storagePath: path, x: spawnX, y: spawnY, visible: true, is_owner: true, userId: currentUser.id, createdByEmail: currentUser.email, uploading: true, frameType: 'none', frameUrl: null };
+  images.push(imgObj);
+  dropzone.style.display = 'none';
+  renderImage(imgObj);
+  updateCanvasFrame();
+  if (imgPanel.classList.contains('open')) renderImgPanel();
+
+  showLoading(true, 'アップロード中...');
+  const uploaded = await uploadToStorage(file, path);
+  showLoading(false);
+
+  if (!uploaded) {
+    images = images.filter(i => i.id !== imgId);
+    world.querySelector('.img-wrap[data-imgid="' + imgId + '"]')?.remove();
+    updateCanvasFrame(); return;
+  }
+  const realUrl = getPubUrl(uploaded);
+  imgObj.storageUrl = realUrl; imgObj.uploading = false;
+  const imgEl = world.querySelector('.img-wrap[data-imgid="' + imgId + '"] .board-img');
+  if (imgEl) imgEl.src = realUrl;
+  const badge = world.querySelector('.img-wrap[data-imgid="' + imgId + '"] .img-uploading');
+  if (badge) badge.remove();
+  URL.revokeObjectURL(blobUrl);
+  await dbInsertImage(imgId, currentBoardId, uploaded, spawnX, spawnY);
+  renderBoardList();
+  showToast('✓ 画像をアップロードしました');
+}
+
+// ── Image render + drag ───────────────────────────────────────────────────────
+function applyImgTransform(wrap, imgObj) {
+  wrap.style.transformOrigin = 'center center';
+  wrap.style.transform = 'rotate(' + (imgObj.imgRotation || 0) + 'deg) scale(' + (imgObj.imgScale || 1) + ')';
+}
+
+function renderImage(imgObj) {
+  const wrap = document.createElement('div');
+  wrap.className = 'img-wrap'; wrap.dataset.imgid = imgObj.id;
+  wrap.style.cssText = 'left:' + imgObj.x + 'px;top:' + imgObj.y + 'px;';
+  if (!imgObj.visible) wrap.style.display = 'none';
+  if (imgObj.imgScale !== 1 || imgObj.imgRotation !== 0) applyImgTransform(wrap, imgObj);
+
+  const img = document.createElement('img');
+  img.className = 'board-img'; img.draggable = false; img.src = imgObj.storageUrl;
+  img.addEventListener('load', () => { pins.filter(p => p.imageId === imgObj.id).forEach(updateLine); });
+
+  const handle = document.createElement('div');
+  handle.className = 'img-handle'; handle.title = 'ドラッグして移動'; handle.textContent = '⠿';
+
+  const rotateHandle = document.createElement('div');
+  rotateHandle.className = 'img-rotate-handle'; rotateHandle.title = 'ドラッグして回転'; rotateHandle.textContent = '↻';
+
+  const scaleHandle = document.createElement('div');
+  scaleHandle.className = 'img-scale-handle'; scaleHandle.title = 'ドラッグして拡縮'; scaleHandle.textContent = '⤡';
+
+  const replaceHandle = document.createElement('div');
+  replaceHandle.className = 'img-replace-handle'; replaceHandle.title = '画像を差し替え'; replaceHandle.textContent = '🔄';
+  replaceHandle.addEventListener('click', e => { e.stopPropagation(); startImageReplace(imgObj.id); });
+
+  const frameHandle = document.createElement('div');
+  frameHandle.className = 'img-frame-handle'; frameHandle.title = 'フレームを選択'; frameHandle.textContent = '🖼';
+  frameHandle.addEventListener('click', e => { e.stopPropagation(); openFramePicker(imgObj.id); });
+
+  const reportHandle = document.createElement('div');
+  reportHandle.className = 'img-report-handle'; reportHandle.title = 'この画像を通報する'; reportHandle.textContent = '🚩';
+  reportHandle.addEventListener('click', e => { e.stopPropagation(); openReportModal('image', imgObj.id); });
+
+  wrap.appendChild(img); wrap.appendChild(handle);
+  wrap.appendChild(rotateHandle); wrap.appendChild(scaleHandle);
+  wrap.appendChild(replaceHandle); wrap.appendChild(frameHandle);
+  wrap.appendChild(reportHandle);
+
+  if (imgObj.uploading) {
+    const badge = document.createElement('div');
+    badge.className = 'img-uploading';
+    badge.innerHTML = '<div class="spinner"></div> アップロード中...';
+    wrap.appendChild(badge);
+  }
+
+  world.insertBefore(wrap, inputCard);
+  applyFrame(wrap, img, imgObj);
+  pins.filter(p => p.imageId === imgObj.id).forEach(addPinDot);
+  makeImageDraggable(wrap, imgObj, img, handle);
+  makeImageRotatable(wrap, imgObj, img, rotateHandle);
+  makeImageScalable(wrap, imgObj, img, scaleHandle);
+}
+
+function makeImageDraggable(wrap, imgObj, img, handle) {
+  let startMX, startMY, startIX, startIY, active = false, moved = false;
+  function beginDrag(e, immed) {
+    if (e.button !== 0) return;
+    active = true; moved = immed;
+    startMX = e.clientX; startMY = e.clientY;
+    startIX = imgObj.x; startIY = imgObj.y;
+    if (immed) handle.style.cursor = 'grabbing';
+    e.preventDefault(); e.stopPropagation();
+  }
+  img.addEventListener('mousedown',    e => { if (!spaceDown) beginDrag(e, false); });
+  handle.addEventListener('mousedown', e => beginDrag(e, true));
+  const onMove = e => {
+    if (!active) return;
+    const dx = e.clientX - startMX, dy = e.clientY - startMY;
+    if (!moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) { moved = true; img.style.cursor = 'grabbing'; }
+    if (!moved) return;
+    imgObj.x = startIX + dx / scale; imgObj.y = startIY + dy / scale;
+    wrap.style.left = imgObj.x + 'px'; wrap.style.top = imgObj.y + 'px';
+    const iw = img.offsetWidth, ih = img.offsetHeight;
+    pins.filter(p => p.imageId === imgObj.id).forEach(p => {
+      const line = connSvg.querySelector('[data-conn="' + p.id + '"]');
+      if (line) { line.setAttribute('x1', imgObj.x + (p.pinX/100)*iw); line.setAttribute('y1', imgObj.y + (p.pinY/100)*ih); }
+    });
+  };
+  const onUp = e => {
+    if (!active) return; active = false;
+    img.style.cursor = 'crosshair'; handle.style.cursor = 'grab';
+    if (!moved) addPinAtClick(e, wrap, imgObj, img);
+    else dbUpdateImagePos(imgObj.id, imgObj.x, imgObj.y);
+    moved = false;
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function addPinAtClick(e, wrap, imgObj, img) {
+  if (isPanning) return;
+  const rect = img.getBoundingClientRect();
+  if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+  const pinX = ((e.clientX - rect.left) / rect.width) * 100;
+  const pinY = ((e.clientY - rect.top)  / rect.height) * 100;
+  const cr   = canvas.getBoundingClientRect();
+  const cardX = (e.clientX - cr.left - offsetX) / scale + 18;
+  const cardY = (e.clientY - cr.top  - offsetY) / scale - 110;
+  pendingPin = { pinX, pinY, cardX, cardY, imageId: imgObj.id };
+  document.querySelectorAll('.pin-dot.pending').forEach(el => el.remove());
+  const dot = document.createElement('div');
+  dot.className = 'pin-dot pending';
+  dot.style.left = pinX + '%'; dot.style.top = pinY + '%';
+  wrap.appendChild(dot);
+  const color = COLORS[colorIdx % COLORS.length];
+  inputCard.style.background = color;
+  inputCard.style.left = cardX + 'px'; inputCard.style.top = cardY + 'px';
+  inputCard.style.display = 'block';
+  commentInput.value = '';
+  setTimeout(() => commentInput.focus(), 50);
+}
+
+// ── Pin / card creation ───────────────────────────────────────────────────────
+function cancelPending() {
+  pendingPin = null; inputCard.style.display = 'none';
+  document.querySelectorAll('.pin-dot.pending').forEach(el => el.remove());
+}
+document.getElementById('btn-cancel').onclick = cancelPending;
+document.getElementById('btn-post').onclick = postComment;
+commentInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } });
+
+async function postComment() {
+  const text = commentInput.value.trim();
+  if (!text || !pendingPin) return;
+  const id     = generateId();
+  const color  = COLORS[colorIdx % COLORS.length];
+  const rotate = (Math.random() - 0.5) * 4;
+  const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const pin = {
+    id, boardId: currentBoardId, imageId: pendingPin.imageId,
+    pinX: pendingPin.pinX, pinY: pendingPin.pinY,
+    cardX: pendingPin.cardX, cardY: pendingPin.cardY,
+    comment: text, likes: 0, featured: false,
+    time: timeStr, color, rotate,
+    replies: [], attachmentUrl: null, attachmentPath: null, cardHidden: false,
+    userId: currentUser.id, createdByEmail: currentUser.email,
+  };
+  pins.push(pin); colorIdx++;
+  document.querySelectorAll('.pin-dot.pending').forEach(el => el.remove());
+  addPinDot(pin); addCard(pin);
+  inputCard.style.display = 'none'; pendingPin = null;
+  renderBoardList();
+  await dbInsertPin(pin);
+  await dbUpdateBoard(currentBoardId, { colorIdx });
+}
+
+function addPinDot(pin) {
+  const wrap = world.querySelector('.img-wrap[data-imgid="' + pin.imageId + '"]');
+  if (!wrap) return;
+  const dot = document.createElement('div');
+  dot.className = 'pin-dot' + (pin.featured ? ' featured' : '');
+  dot.dataset.id = pin.id;
+  dot.style.left = pin.pinX + '%'; dot.style.top = pin.pinY + '%';
+  wrap.appendChild(dot);
+}
+
+function addCard(pin) {
+  const replies = pin.replies || [];
+  const repliesHtml = replies.map(r =>
+    '<div class="reply-item"><span class="reply-text">' + escHtml(r.comment) + '</span><span class="reply-time">' + r.time + '</span></div>'
+  ).join('');
+  const isCollapsed = pin.cardHidden === true;
+  const short = pin.comment.length > 22 ? pin.comment.slice(0, 22) + '…' : pin.comment;
+  const card = document.createElement('div');
+  card.className = 'card' + (isCollapsed ? ' collapsed' : '');
+  card.dataset.id = pin.id;
+  card.style.cssText = 'background:' + pin.color + ';left:' + pin.cardX + 'px;top:' + pin.cardY + 'px;transform:rotate(' + (pin.rotate||0) + 'deg) scale(' + (pin.cardScale||1) + ');transform-origin:center center';
+  const currentBoard = boards.find(b => b.id === currentBoardId);
+  const canDelete = pin.userId === currentUser.id || currentBoard?.userId === currentUser.id;
+  card.innerHTML =
+    '<div class="card-tape"></div>' +
+    '<div class="card-top-btns">' +
+      '<button class="btn-rotate-card" data-id="' + pin.id + '" title="ドラッグして回転">↻</button>' +
+      '<button class="btn-collapse-card" data-id="' + pin.id + '">' + (isCollapsed ? '▶' : '▼') + '</button>' +
+      (canDelete ? '<button class="btn-close-card" data-id="' + pin.id + '" title="削除">✕</button>' : '') +
+    '</div>' +
+    '<div class="card-scale-handle" data-id="' + pin.id + '" title="ドラッグして拡縮"></div>' +
+    '<div class="card-collapsed-strip" title="' + escHtml(pin.comment) + '">' + escHtml(short) + '</div>' +
+    '<div class="card-body">' +
+      '<div class="card-text">' + escHtml(pin.comment) + '</div>' +
+      '<div class="card-img-wrap"' + (pin.attachmentUrl ? '' : ' style="display:none"') + '>' +
+        (pin.attachmentUrl ? '<img src="' + pin.attachmentUrl + '" alt="添付">' : '') +
+      '</div>' +
+      '<div class="card-footer">' +
+        '<span class="card-time">' + pin.time + '</span>' +
+        '<div class="card-actions">' +
+          (pin.featured ? '<span class="badge-featured">注目</span>' : '') +
+          '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' +
+          '<button class="btn-wavy" data-id="' + pin.id + '">〜 ' + pin.likes + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn-expand' + (replies.length > 0 ? ' has-replies' : '') + '" data-id="' + pin.id + '">' +
+        (replies.length > 0 ? '💬 ' + replies.length + ' 件の返信' : '💬 返信する') +
+      '</button>' +
+      '<div class="card-replies">' +
+        '<div class="replies-list">' + repliesHtml + '</div>' +
+        '<div class="reply-input-wrap">' +
+          '<textarea class="reply-input" rows="2" placeholder="返信を追加..." data-id="' + pin.id + '"></textarea>' +
+          '<button class="btn-reply-post" data-id="' + pin.id + '">返信する</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  world.appendChild(card);
+  card.querySelector('.reply-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postReply(pin.id, card); }
+  });
+  createConnectionLine(pin);
+  makeDraggable(card);
+  makeCardRotatable(card, pin);
+  makeCardScalable(card, pin);
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Reply ─────────────────────────────────────────────────────────────────────
+async function postReply(pinId, card) {
+  const ta   = card.querySelector('.reply-input');
+  const text = ta.value.trim(); if (!text) return;
+  const pin  = pins.find(p => p.id === pinId); if (!pin) return;
+  if (!pin.replies) pin.replies = [];
+  const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const rid = generateId();
+  pin.replies.push({ id: rid, comment: text, time: timeStr });
+  const item = document.createElement('div');
+  item.className = 'reply-item';
+  item.innerHTML = '<span class="reply-text">' + escHtml(text) + '</span><span class="reply-time">' + timeStr + '</span>';
+  const list = card.querySelector('.replies-list');
+  list.appendChild(item); list.scrollTop = list.scrollHeight;
+  ta.value = ''; ta.style.height = ''; ta.scrollTop = 0;
+  const btn = card.querySelector('.btn-expand');
+  btn.textContent = '💬 ' + pin.replies.length + ' 件の返信';
+  btn.classList.add('has-replies');
+  await dbInsertReply(rid, pinId, text, timeStr);
+}
+
+// ── Card interactions ─────────────────────────────────────────────────────────
+world.addEventListener('click', async e => {
+  // Collapse
+  const colBtn = e.target.closest('.btn-collapse-card');
+  if (colBtn) {
+    const id = +colBtn.dataset.id;
+    const pin = pins.find(p => p.id === id); if (!pin) return;
+    const card = world.querySelector('.card[data-id="' + id + '"]'); if (!card) return;
+    pin.cardHidden = !pin.cardHidden;
+    card.classList.toggle('collapsed', pin.cardHidden);
+    colBtn.textContent = pin.cardHidden ? '▶' : '▼';
+    await dbUpdatePin(id, { cardHidden: pin.cardHidden }); return;
+  }
+  // Wavy
+  const wavyBtn = e.target.closest('.btn-wavy');
+  if (wavyBtn) {
+    const id = +wavyBtn.dataset.id;
+    const pin = pins.find(p => p.id === id); if (!pin) return;
+    pin.likes++;
+    wavyBtn.textContent = '〜 ' + pin.likes;
+    wavyBtn.classList.remove('pop'); void wavyBtn.offsetWidth; wavyBtn.classList.add('pop');
+    const upd = { likes: pin.likes };
+    if (pin.likes >= 3 && !pin.featured) {
+      pin.featured = true; upd.featured = true;
+      world.querySelector('.pin-dot[data-id="' + id + '"]')?.classList.add('featured');
+      const card = world.querySelector('.card[data-id="' + id + '"]');
+      if (card) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-featured'; badge.textContent = '注目';
+        card.querySelector('.card-actions').insertBefore(badge, card.querySelector('.card-actions').firstChild);
+      }
+      updateFeaturedBar();
+    }
+    await dbUpdatePin(id, upd); return;
+  }
+  // Close
+  const closeBtn = e.target.closest('.btn-close-card');
+  if (closeBtn) {
+    const id  = +closeBtn.dataset.id;
+    const pin = pins.find(p => p.id === id);
+    if (!pin) return;
+    const isOwn  = pin.userId === currentUser.id;
+    const author = pin.createdByEmail || '他のユーザー';
+    const msg = isOwn
+      ? 'このコメントを削除しますか？（元に戻せません）'
+      : '⚠️ ' + author + ' が投稿したコメントです。\n本当に削除しますか？';
+    if (!confirm(msg)) return;
+    pins = pins.filter(p => p.id !== id);
+    world.querySelector('.card[data-id="' + id + '"]')?.remove();
+    world.querySelector('.pin-dot[data-id="' + id + '"]')?.remove();
+    connSvg.querySelector('[data-conn="' + id + '"]')?.remove();
+    updateFeaturedBar(); renderBoardList();
+    await dbDeletePin(id); return;
+  }
+  // Expand replies
+  const expandBtn = e.target.closest('.btn-expand');
+  if (expandBtn) {
+    const card = expandBtn.closest('.card');
+    const div  = card.querySelector('.card-replies');
+    const opening = div.style.display !== 'block';
+    div.style.display = opening ? 'block' : 'none';
+    if (opening) { div.querySelector('.replies-list').scrollTop = 99999; setTimeout(() => div.querySelector('.reply-input')?.focus(), 50); }
+    return;
+  }
+  // Reply post
+  const replyBtn = e.target.closest('.btn-reply-post');
+  if (replyBtn) {
+    const card = world.querySelector('.card[data-id="' + (+replyBtn.dataset.id) + '"]');
+    if (card) await postReply(+replyBtn.dataset.id, card); return;
+  }
+  // Attach
+  const attachBtn = e.target.closest('.btn-attach');
+  if (attachBtn) { attachTargetPinId = +attachBtn.dataset.id; attachInput.click(); return; }
+});
+
+attachInput.addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file || !attachTargetPinId) return;
+  e.target.value = '';
+  const pin = pins.find(p => p.id === attachTargetPinId);
+  if (!pin) { attachTargetPinId = null; return; }
+  showLoading(true, 'アップロード中...');
+  const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  // タイムスタンプ付きで毎回ユニークなパスにする（上書き競合を防ぐ）
+  const path = currentUser.id + '/attach_' + attachTargetPinId + '_' + Date.now() + '.' + ext;
+  const uploaded = await uploadToStorage(file, path);
+  showLoading(false);
+  if (!uploaded) { attachTargetPinId = null; return; }
+  const url = getPubUrl(uploaded);
+  pin.attachmentUrl = url; pin.attachmentPath = uploaded;
+  const card = world.querySelector('.card[data-id="' + pin.id + '"]');
+  if (card) {
+    const wrap = card.querySelector('.card-img-wrap');
+    if (wrap) { wrap.innerHTML = '<img src="' + url + '" alt="添付">'; wrap.style.display = 'block'; }
+  }
+  attachTargetPinId = null;
+  await dbUpdatePin(pin.id, { attachmentPath: uploaded });
+  showToast('✓ 画像を添付しました');
+});
+
+function updateCardsZIndex() {
+  // likesが多いカードほど前面に表示
+  pins.forEach(pin => {
+    const card = world.querySelector('.card[data-id="' + pin.id + '"]');
+    if (card) card.style.zIndex = 10 + (pin.likes || 0);
+  });
+}
+
+function updateFeaturedBar() {
+  if (boardPanel.classList.contains('open')) renderRankPanel();
+  updateCardsZIndex();
+  const top3 = [...pins].filter(p => p.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 3);
+  if (!top3.length) { featuredBar.style.display = 'none'; return; }
+  featuredBar.style.display = 'flex';
+  featuredBar.innerHTML = '<span class="featured-label">〜 Wavy</span>';
+  top3.forEach(p => {
+    const span = document.createElement('span');
+    span.style.cssText = 'font-size:11px;color:#555;border-left:1px solid #eee;padding-left:12px;cursor:pointer;';
+    const short = p.comment.length > 24 ? p.comment.slice(0,24)+'…' : p.comment;
+    span.innerHTML = escHtml(short) + ' <span style="color:#3d8b41;font-weight:700;">〜' + p.likes + '</span>';
+    span.addEventListener('click', () => scrollToCard(p));
+    featuredBar.appendChild(span);
+  });
+}
+
+// ── Draggable cards ───────────────────────────────────────────────────────────
+function makeDraggable(el) {
+  let sx, sy, ex, ey, dragging = false;
+  el.addEventListener('mousedown', e => {
+    if (e.target.closest('button,textarea,.card-replies')) return;
+    e.stopPropagation(); dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    ex = parseFloat(el.style.left)||0; ey = parseFloat(el.style.top)||0;
+    el.style.zIndex = 100; el.style.boxShadow = '6px 10px 28px rgba(0,0,0,0.22)';
+  });
+  const onMove = e => {
+    if (!dragging) return;
+    const nx = ex + (e.clientX - sx) / scale;
+    const ny = ey + (e.clientY - sy) / scale;
+    el.style.left = nx + 'px'; el.style.top = ny + 'px';
+    const line = connSvg.querySelector('[data-conn="' + el.dataset.id + '"]');
+    if (line) { line.setAttribute('x2', nx + 94); line.setAttribute('y2', ny); }
+  };
+  const onUp = async () => {
+    if (!dragging) return; dragging = false;
+    el.style.zIndex = 10; el.style.boxShadow = '2px 4px 12px rgba(0,0,0,0.13)';
+    const id  = +el.dataset.id;
+    const pin = pins.find(p => p.id === id);
+    if (pin) {
+      pin.cardX = parseFloat(el.style.left)||pin.cardX;
+      pin.cardY = parseFloat(el.style.top) ||pin.cardY;
+      await dbUpdatePin(id, { cardX: pin.cardX, cardY: pin.cardY });
+    }
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+// ── Layer toggles ──────────────────────────────────────────────────────────────
+function setupLayerToggle(btnId, cssClass, get, set) {
+  document.getElementById(btnId).addEventListener('click', () => {
+    const next = !get(); set(next);
+    world.classList.toggle(cssClass, !next);
+    document.getElementById(btnId).classList.toggle('off', !next);
+  });
+}
+setupLayerToggle('btn-toggle-pins',  'hide-pins',  () => showPins,  v => showPins  = v);
+setupLayerToggle('btn-toggle-lines', 'hide-lines', () => showLines, v => showLines = v);
+setupLayerToggle('btn-toggle-cards', 'hide-cards', () => showCards, v => showCards = v);
+
+// ── Image panel ───────────────────────────────────────────────────────────────
+function renderImgPanel() {
+  const list = document.getElementById('img-panel-list'); list.innerHTML = '';
+  if (images.length === 0) { list.innerHTML = '<div id="img-panel-empty">このボードに画像がありません。</div>'; return; }
+  images.forEach((imgObj, i) => {
+    const item = document.createElement('div'); item.className = 'img-panel-item';
+    item.innerHTML =
+      '<img class="img-panel-thumb" src="' + imgObj.storageUrl + '" alt="画像 ' + (i+1) + '">' +
+      '<span class="img-panel-label">画像 ' + (i+1) + '</span>' +
+      '<label class="img-toggle-switch">' +
+        '<input type="checkbox" data-imgid="' + imgObj.id + '"' + (imgObj.visible ? ' checked' : '') + '>' +
+        '<span class="toggle-slider"></span>' +
+      '</label>';
+    item.querySelector('input').addEventListener('change', function() { toggleImageVisibility(imgObj.id, this.checked); });
+    list.appendChild(item);
+  });
+}
+
+async function toggleImageVisibility(imgId, visible) {
+  const imgObj = images.find(i => i.id === imgId); if (!imgObj) return;
+  imgObj.visible = visible;
+  const wrap = world.querySelector('.img-wrap[data-imgid="' + imgId + '"]');
+  if (wrap) wrap.style.display = visible ? '' : 'none';
+  pins.filter(p => p.imageId === imgId).forEach(p => {
+    const line = connSvg.querySelector('[data-conn="' + p.id + '"]');
+    if (line) line.style.display = visible ? '' : 'none';
+  });
+  await dbUpdateImageVisible(imgId, visible);
+}
+
+btnImgPanel.addEventListener('click', () => {
+  if (imgPanel.classList.contains('open')) {
+    imgPanelPinned = false; setPinState(imgPanel, document.getElementById('btn-pin-img'), false);
+    imgPanel.classList.remove('open'); btnImgPanel.classList.remove('active');
+  } else {
+    renderImgPanel(); imgPanel.classList.add('open'); btnImgPanel.classList.add('active');
+  }
+});
+document.getElementById('btn-close-img-panel').onclick = () => {
+  imgPanelPinned = false;
+  setPinState(imgPanel, document.getElementById('btn-pin-img'), false);
+  imgPanel.classList.remove('open');
+  btnImgPanel.classList.remove('active');
+};
+document.addEventListener('click', e => {
+  if (imgPanelPinned) return;
+  if (imgPanel.classList.contains('open') && !imgPanel.contains(e.target) && !btnImgPanel.contains(e.target)) {
+    imgPanel.classList.remove('open'); btnImgPanel.classList.remove('active');
+  }
+});
+
+// ── Board name ────────────────────────────────────────────────────────────────
+boardNameInput.addEventListener('change', async () => {
+  const name = boardNameInput.value.trim();
+  const board = boards.find(b => b.id === currentBoardId);
+  if (!name) { boardNameInput.value = board ? board.name : 'ボード'; return; }
+  if (board) board.name = name;
+  renderBoardList();
+  await dbUpdateBoard(currentBoardId, { name });
+});
+boardNameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') boardNameInput.blur();
+  if (e.key === 'Escape') { boardNameInput.value = (boards.find(b => b.id === currentBoardId) || {}).name || ''; boardNameInput.blur(); }
+});
+
+// ── Board buttons ─────────────────────────────────────────────────────────────
+document.getElementById('btn-add-child').addEventListener('click', async () => {
+  const b = await dbCreateBoard(null, currentBoardId); if (!b) return;
+  boards.push(b); currentBoardId = null; await switchToBoard(b.id);
+});
+document.getElementById('btn-boards').addEventListener('click', () => {
+  boardPanel.classList.contains('open') ? closeBoardPanel() : openBoardPanel();
+});
+document.getElementById('btn-close-panel').onclick = () => {
+  boardPanelPinned = false;
+  setPinState(boardPanel, document.getElementById('btn-pin-board'), false);
+  boardPanel.classList.remove('open');
+};
+document.getElementById('btn-new-board').addEventListener('click', async () => {
+  const count = boards.filter(b => !b.parentId).length;
+  const b = await dbCreateBoard('ボード ' + (count + 1), null); if (!b) return;
+  boards.push(b); currentBoardId = null; await switchToBoard(b.id, true);
+});
+document.addEventListener('click', e => {
+  if (!boardPanelPinned && boardPanel.classList.contains('open') && !boardPanel.contains(e.target) && !e.target.closest('#btn-boards')) {
+    closeBoardPanel();
+  }
+});
+
+// ── Image rotate / scale handles ─────────────────────────────────────────────
+function imgCenter(imgObj, img) {
+  return { cx: imgObj.x + img.offsetWidth / 2, cy: imgObj.y + img.offsetHeight / 2 };
+}
+function worldMouse(e) {
+  const cr = canvas.getBoundingClientRect();
+  return { mx: (e.clientX - cr.left - offsetX) / scale, my: (e.clientY - cr.top - offsetY) / scale };
+}
+
+function makeImageRotatable(wrap, imgObj, img, handle) {
+  let startAngle = 0, startRotation = 0, active = false;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation(); active = true;
+    const { cx, cy } = imgCenter(imgObj, img);
+    const { mx, my } = worldMouse(e);
+    startAngle = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
+    startRotation = imgObj.imgRotation || 0;
+    handle.style.cursor = 'grabbing';
+  });
+  const onMove = e => {
+    if (!active) return;
+    const { cx, cy } = imgCenter(imgObj, img);
+    const { mx, my } = worldMouse(e);
+    imgObj.imgRotation = startRotation + Math.atan2(my - cy, mx - cx) * 180 / Math.PI - startAngle;
+    applyImgTransform(wrap, imgObj);
+  };
+  const onUp = async () => {
+    if (!active) return; active = false;
+    handle.style.cursor = 'crosshair';
+    await dbUpdateImageTransform(imgObj.id, imgObj.imgScale || 1, imgObj.imgRotation || 0);
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function makeImageScalable(wrap, imgObj, img, handle) {
+  let startDist = 1, startScale = 1, active = false;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation(); active = true;
+    const { cx, cy } = imgCenter(imgObj, img);
+    const { mx, my } = worldMouse(e);
+    startDist = Math.sqrt((mx-cx)**2 + (my-cy)**2) || 1;
+    startScale = imgObj.imgScale || 1;
+  });
+  const onMove = e => {
+    if (!active) return;
+    const { cx, cy } = imgCenter(imgObj, img);
+    const { mx, my } = worldMouse(e);
+    const dist = Math.sqrt((mx-cx)**2 + (my-cy)**2);
+    imgObj.imgScale = Math.min(4, Math.max(0.1, startScale * dist / startDist));
+    applyImgTransform(wrap, imgObj);
+  };
+  const onUp = async () => {
+    if (!active) return; active = false;
+    await dbUpdateImageTransform(imgObj.id, imgObj.imgScale || 1, imgObj.imgRotation || 0);
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+// ── Card rotate / scale handles ───────────────────────────────────────────────
+function cardCenter(card) {
+  const w = card.offsetWidth, h = card.offsetHeight;
+  return { cx: parseFloat(card.style.left) + w / 2, cy: parseFloat(card.style.top) + h / 2 };
+}
+
+function makeCardRotatable(card, pin) {
+  const handle = card.querySelector('.btn-rotate-card');
+  if (!handle) return;
+  let startAngle = 0, startRotation = 0, active = false;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation(); active = true;
+    const { cx, cy } = cardCenter(card);
+    const { mx, my } = worldMouse(e);
+    startAngle = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
+    startRotation = pin.rotate || 0;
+    handle.style.cursor = 'grabbing';
+  });
+  const onMove = e => {
+    if (!active) return;
+    const { cx, cy } = cardCenter(card);
+    const { mx, my } = worldMouse(e);
+    pin.rotate = startRotation + Math.atan2(my - cy, mx - cx) * 180 / Math.PI - startAngle;
+    card.style.transform = 'rotate(' + pin.rotate + 'deg) scale(' + (pin.cardScale || 1) + ')';
+  };
+  const onUp = async () => {
+    if (!active) return; active = false;
+    handle.style.cursor = 'crosshair';
+    await dbUpdatePin(pin.id, { rotate: pin.rotate });
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function makeCardScalable(card, pin) {
+  const handle = card.querySelector('.card-scale-handle');
+  if (!handle) return;
+  let startDist = 1, startScale = 1, active = false;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation(); active = true;
+    const { cx, cy } = cardCenter(card);
+    const { mx, my } = worldMouse(e);
+    startDist = Math.sqrt((mx-cx)**2 + (my-cy)**2) || 1;
+    startScale = pin.cardScale || 1;
+    handle.style.cursor = 'nwse-resize';
+  });
+  const onMove = e => {
+    if (!active) return;
+    const { cx, cy } = cardCenter(card);
+    const { mx, my } = worldMouse(e);
+    const dist = Math.sqrt((mx-cx)**2 + (my-cy)**2);
+    pin.cardScale = Math.min(3, Math.max(0.4, startScale * dist / startDist));
+    card.style.transform = 'rotate(' + (pin.rotate || 0) + 'deg) scale(' + pin.cardScale + ')';
+  };
+  const onUp = async () => {
+    if (!active) return; active = false;
+    await dbUpdatePin(pin.id, { cardScale: pin.cardScale });
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+// ── Frame system ──────────────────────────────────────────────────────────────
+const FRAME_TEMPLATES = [
+  { id: 'none',     label: 'なし',         preview: 'background:#c8ddc8;border-radius:4px' },
+  { id: 'white',    label: '白',           preview: 'background:#c8ddc8;border:8px solid #fff;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2)' },
+  { id: 'polaroid', label: 'ポラロイド',   preview: 'background:#c8ddc8;border:8px solid #fff;border-bottom:22px solid #fff;border-radius:2px;box-shadow:0 2px 8px rgba(0,0,0,0.2)' },
+  { id: 'black',    label: '黒',           preview: 'background:#c8ddc8;border:8px solid #111;border-radius:4px' },
+  { id: 'gold',     label: 'ゴールド',     preview: 'background:#c8ddc8;border:8px solid #c8a02e;border-radius:4px;box-shadow:0 0 0 2px #8b6a00' },
+  { id: 'round',    label: '丸角',         preview: 'background:#c8ddc8;border:8px solid #fff;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.2)' },
+  { id: 'vintage',  label: 'ヴィンテージ', preview: 'background:#c8ddc8;border:8px solid #c8a978;border-radius:2px;box-shadow:0 0 0 2px #7a5c28' },
+  { id: 'shadow',   label: 'シャドウ',     preview: 'background:#c8ddc8;border-radius:4px;box-shadow:0 0 0 4px rgba(255,255,255,0.9),0 4px 16px rgba(0,0,0,0.4)' },
+  { id: 'double',   label: 'ダブル',       preview: 'background:#c8ddc8;border:4px solid #fff;border-radius:4px;box-shadow:0 0 0 1px #ddd,0 0 0 8px #fff,0 0 0 9px #ccc' },
+];
+
+let framePickerTargetId = null;
+
+function applyFrame(wrap, img, imgObj) {
+  // テンプレートフレームは data-frame 属性で CSS 適用
+  if (imgObj.frameType && imgObj.frameType !== 'none' && imgObj.frameType !== 'custom') {
+    wrap.dataset.frame = imgObj.frameType;
+  } else {
+    delete wrap.dataset.frame;
+  }
+  // カスタムフレームオーバーレイ
+  wrap.querySelector('.frame-overlay')?.remove();
+  if (imgObj.frameType === 'custom' && imgObj.frameUrl) {
+    const ov = document.createElement('img');
+    ov.className = 'frame-overlay'; ov.src = imgObj.frameUrl; ov.draggable = false;
+    wrap.appendChild(ov);
+  }
+}
+
+async function openFramePicker(imgId) {
+  framePickerTargetId = imgId;
+  const imgObj = images.find(i => i.id === imgId);
+  if (!imgObj) return;
+
+  // テンプレートグリッド描画
+  const tgrid = document.getElementById('frame-template-grid');
+  tgrid.innerHTML = '';
+  FRAME_TEMPLATES.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'frame-thumb' + (imgObj.frameType === t.id ? ' active' : '');
+    div.innerHTML = '<div class="frame-preview" style="' + t.preview + '"></div><div class="frame-label">' + t.label + '</div>';
+    div.addEventListener('click', () => selectFrame(t.id, null));
+    tgrid.appendChild(div);
+  });
+
+  // カスタムフレーム描画
+  await renderCustomFrames(imgObj);
+  document.getElementById('frame-modal').classList.add('visible');
+}
+
+async function renderCustomFrames(imgObj) {
+  const cgrid = document.getElementById('frame-custom-grid');
+  cgrid.innerHTML = '';
+  const frames = await dbLoadFrames();
+  frames.forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'frame-custom-item' + (imgObj && imgObj.frameType === 'custom' && imgObj.frameUrl === f.url ? ' active' : '');
+    div.innerHTML = '<img src="' + f.url + '" alt="' + escHtml(f.name || '') + '"><button class="frame-del" data-id="' + f.id + '">✕</button>';
+    div.addEventListener('click', e => {
+      if (e.target.closest('.frame-del')) return;
+      selectFrame('custom', f.url);
+    });
+    div.querySelector('.frame-del').addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('このフレームを削除しますか？')) return;
+      await dbDeleteFrame(f.id);
+      const currentImg = images.find(i => i.id === framePickerTargetId);
+      await renderCustomFrames(currentImg);
+    });
+    cgrid.appendChild(div);
+  });
+}
+
+async function selectFrame(frameType, frameUrl) {
+  const imgObj = images.find(i => i.id === framePickerTargetId);
+  if (!imgObj) return;
+  imgObj.frameType = frameType;
+  imgObj.frameUrl  = frameUrl;
+  const wrap = world.querySelector('.img-wrap[data-imgid="' + imgObj.id + '"]');
+  const img  = wrap?.querySelector('.board-img');
+  if (wrap && img) applyFrame(wrap, img, imgObj);
+  // モーダルを閉じて結果を見せる
+  document.getElementById('frame-modal').classList.remove('visible');
+  showToast(frameType === 'none' ? 'フレームを外しました' : '✓ フレームを適用しました');
+  // DB保存
+  const { error } = await sbClient.from('images')
+    .update({ frame_type: frameType, frame_url: frameUrl || null })
+    .eq('id', imgObj.id);
+  if (error) showToast('保存エラー: ' + error.message);
+}
+
+document.getElementById('frame-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('frame-modal')) document.getElementById('frame-modal').classList.remove('visible');
+});
+
+// カスタムフレームアップロード
+document.getElementById('btn-upload-frame').addEventListener('click', () => document.getElementById('frame-file-input').click());
+document.getElementById('frame-file-input').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const ext  = (file.name.split('.').pop() || 'png').toLowerCase();
+  const fid  = generateId();
+  const path = currentUser.id + '/frames/' + fid + '.' + ext;
+  showLoading(true, 'フレームをアップロード中...');
+  const uploaded = await uploadToStorage(file, path);
+  showLoading(false);
+  if (!uploaded) return;
+  const name = file.name.replace(/\.[^.]+$/, '');
+  await dbInsertFrame(fid, name, uploaded);
+  const imgObj = images.find(i => i.id === framePickerTargetId);
+  await renderCustomFrames(imgObj);
+  showToast('✓ フレームをアップロードしました');
+});
+
+// ── Image replace ─────────────────────────────────────────────────────────────
+let replaceTargetImgId = null;
+const replaceInput = document.createElement('input');
+replaceInput.type = 'file'; replaceInput.accept = 'image/*'; replaceInput.style.display = 'none';
+document.body.appendChild(replaceInput);
+
+function startImageReplace(imgId) { replaceTargetImgId = imgId; replaceInput.click(); }
+
+replaceInput.addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file || !replaceTargetImgId) return;
+  e.target.value = '';
+  const imgObj = images.find(i => i.id === replaceTargetImgId);
+  if (!imgObj) { replaceTargetImgId = null; return; }
+  showLoading(true, '差し替え中...');
+  const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = currentUser.id + '/' + imgObj.id + '_r' + Date.now() + '.' + ext;
+  const uploaded = await uploadToStorage(file, path);
+  showLoading(false);
+  if (!uploaded) { replaceTargetImgId = null; return; }
+  const url = getPubUrl(uploaded);
+  imgObj.storageUrl = url; imgObj.storagePath = uploaded;
+  const imgEl = world.querySelector('.img-wrap[data-imgid="' + imgObj.id + '"] .board-img');
+  if (imgEl) imgEl.src = url;
+  await dbReplaceImagePath(imgObj.id, uploaded);
+  if (imgPanel.classList.contains('open')) renderImgPanel();
+  replaceTargetImgId = null;
+  showToast('✓ 画像を差し替えました');
+});
+
+// ── Center on first image ─────────────────────────────────────────────────────
+function centerOnFirstImage() {
+  if (images.length === 0) return;
+  const firstImg = images[0];
+  const wrap  = world.querySelector('.img-wrap[data-imgid="' + firstImg.id + '"]');
+  if (!wrap) return;
+  const imgEl = wrap.querySelector('.board-img');
+  const doCenter = () => {
+    const w  = imgEl.offsetWidth  || 500;
+    const h  = imgEl.offsetHeight || 400;
+    const cr = canvas.getBoundingClientRect();
+    offsetX = cr.width  / 2 - (firstImg.x + w / 2) * scale;
+    offsetY = cr.height / 2 - (firstImg.y + h / 2) * scale;
+    applyTransform();
+  };
+  if (imgEl.complete && imgEl.naturalWidth > 0) doCenter();
+  else imgEl.addEventListener('load', doCenter, { once: true });
+}
+
+// ── Pan ───────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.code === 'Space') { spaceDown = true; e.preventDefault(); } });
+document.addEventListener('keyup',   e => { if (e.code === 'Space') spaceDown = false; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || spaceDown) {
+    isPanning = true; panStartX = e.clientX; panStartY = e.clientY;
+    panOffX = offsetX; panOffY = offsetY; e.preventDefault();
+  }
+});
+window.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  offsetX = panOffX + (e.clientX - panStartX);
+  offsetY = panOffY + (e.clientY - panStartY);
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { isPanning = false; });
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const cr       = canvas.getBoundingClientRect();
+  const mouseX   = e.clientX - cr.left;
+  const mouseY   = e.clientY - cr.top;
+  // ワールド座標上のカーソル位置を保持
+  const worldX   = (mouseX - offsetX) / scale;
+  const worldY   = (mouseY - offsetY) / scale;
+  // スケール変更
+  const factor   = e.deltaY > 0 ? 0.9 : 1.1;
+  scale = Math.min(3, Math.max(0.2, scale * factor));
+  // カーソル位置が変わらないようにオフセット再計算
+  offsetX = mouseX - worldX * scale;
+  offsetY = mouseY - worldY * scale;
+  applyTransform();
+}, { passive: false });
+document.getElementById('btn-zoomin').onclick  = () => { scale = Math.min(3, scale * 1.2); applyTransform(); };
+document.getElementById('btn-zoomout').onclick = () => { scale = Math.max(0.2, scale * 0.8); applyTransform(); };
+document.getElementById('btn-reset').onclick   = () => { scale = 1; offsetX = 0; offsetY = 0; applyTransform(); };
+
+let saveZoomTimer;
+function saveZoom() {
+  clearTimeout(saveZoomTimer);
+  saveZoomTimer = setTimeout(() => {
+    if (!currentBoardId) return;
+    // スケールのみ保存（パン位置は開くたびに最初の画像へ戻す）
+    localStorage.setItem('wave_zoom_' + currentBoardId, JSON.stringify({ scale }));
+  }, 400);
+}
+
+function restoreZoom(boardId) {
+  const saved = localStorage.getItem('wave_zoom_' + boardId);
+  if (saved) {
+    try {
+      const z = JSON.parse(saved);
+      scale = z.scale || 1;
+      return;
+    } catch(e) {}
+  }
+  // デフォルト: スマホは50%、PCは100%
+  scale = window.innerWidth < 768 ? 0.5 : 1;
+}
+
+function applyTransform() {
+  world.style.transform = 'translate(' + offsetX + 'px,' + offsetY + 'px) scale(' + scale + ')';
+  canvas.style.backgroundSize = (24*scale) + 'px ' + (24*scale) + 'px';
+  canvas.style.backgroundPosition = offsetX + 'px ' + offsetY + 'px';
+  document.getElementById('zoom-label').textContent = Math.round(scale * 100) + '%';
+  saveZoom();
+}
+
+// ── Rank panel ────────────────────────────────────────────────────────────────
+// ランクはボードパネル内に統合 — openBoardPanel 時に自動で描画
+
+function renderRankPanel() {
+  const list = document.getElementById('rank-list');
+  list.innerHTML = '';
+  const sorted = [...pins].filter(p => p.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 10);
+  if (sorted.length === 0) {
+    list.innerHTML = '<div class="rank-empty">〜 がついたコメントがまだありません。<br>付箋の 〜 ボタンを押してみよう！</div>';
+    return;
+  }
+  sorted.forEach((pin, i) => {
+    const medal = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const item = document.createElement('div');
+    item.className = 'rank-item';
+    item.innerHTML =
+      '<div class="rank-badge ' + medal + '">〜' + pin.likes + '</div>' +
+      '<div class="rank-body">' +
+        '<div class="rank-comment">' + escHtml(pin.comment) + '</div>' +
+        '<div class="rank-meta">' + pin.time + (pin.featured ? ' · 🔥注目' : '') + '</div>' +
+      '</div>';
+    item.addEventListener('click', () => {
+      closeRankPanel();
+      scrollToCard(pin);
+    });
+    list.appendChild(item);
+  });
+}
+
+function scrollToCard(pin) {
+  const cr   = canvas.getBoundingClientRect();
+  const card = world.querySelector('.card[data-id="' + pin.id + '"]');
+  const cx   = card ? parseFloat(card.style.left) + 94 : pin.cardX + 94;
+  const cy   = card ? parseFloat(card.style.top)  + 60 : pin.cardY + 60;
+  offsetX = cr.width  / 2 - cx * scale;
+  offsetY = cr.height / 2 - cy * scale;
+  applyTransform();
+  // ハイライトアニメ
+  if (card) {
+    card.style.boxShadow = '0 0 0 3px #3d8b41, 0 8px 24px rgba(0,0,0,0.2)';
+    setTimeout(() => { card.style.boxShadow = ''; }, 1200);
+  }
+}
+
+// ── Panel pin buttons ─────────────────────────────────────────────────────────
+document.getElementById('btn-pin-board').addEventListener('click', () => {
+  boardPanelPinned = true;
+  setPinState(boardPanel, document.getElementById('btn-pin-board'), true);
+  openBoardPanel();
+});
+document.getElementById('btn-pin-img').addEventListener('click', () => {
+  imgPanelPinned = true;
+  setPinState(imgPanel, document.getElementById('btn-pin-img'), true);
+  renderImgPanel(); imgPanel.classList.add('open'); btnImgPanel.classList.add('active');
+});
+
+// ── Help modal ────────────────────────────────────────────────────────────────
+const helpModal = document.getElementById('help-modal');
+document.getElementById('btn-help').addEventListener('click', () => helpModal.classList.add('visible'));
+document.getElementById('btn-help-close').addEventListener('click', () => {
+  helpModal.classList.remove('visible');
+  localStorage.setItem('wave_help_seen', '1');
+});
+helpModal.addEventListener('click', e => {
+  if (e.target === helpModal) {
+    helpModal.classList.remove('visible');
+    localStorage.setItem('wave_help_seen', '1');
+  }
+});
+function showHelpIfFirst() {
+  if (!localStorage.getItem('wave_help_seen')) helpModal.classList.add('visible');
+}
+
+// ── Report system ──────────────────────────────────────────────────────────────
+let reportTarget = null;
+const reportModal = document.getElementById('report-modal');
+const REPORT_REASONS = [
+  { value: 'spam',          label: 'スパム',             sub: '宣伝・繰り返しの投稿・無関係なリンクなど' },
+  { value: 'inappropriate', label: '不適切なコンテンツ', sub: '暴力・ヘイト・性的コンテンツなど' },
+  { value: 'copyright',     label: '著作権侵害',         sub: '無断転載・著作物の不正使用など' },
+  { value: 'other',         label: 'その他',             sub: '上記に当てはまらない問題' },
+];
+function openReportModal(targetType, targetId) {
+  reportTarget = { type: targetType, id: String(targetId) };
+  document.getElementById('report-modal-title').textContent =
+    '🚨 ' + (targetType === 'image' ? '画像' : 'ボード') + 'を通報する';
+  showReportForm();
+  reportModal.classList.add('visible');
+}
+function showReportForm() {
+  const reasonsHtml = REPORT_REASONS.map(r =>
+    '<label class="report-reason-item">' +
+      '<input type="radio" name="report-reason" value="' + r.value + '">' +
+      '<div><div class="report-reason-label">' + r.label + '</div>' +
+           '<div class="report-reason-sub">' + r.sub + '</div></div>' +
+    '</label>'
+  ).join('');
+  document.getElementById('report-card-content').innerHTML =
+    '<div class="report-card-body">' +
+      '<p class="report-desc">通報する理由を選択してください。悪意のある通報はアカウント停止の対象となる場合があります。</p>' +
+      '<div class="report-reason-list">' + reasonsHtml + '</div>' +
+      '<textarea class="report-note-ta" id="report-note" rows="3" placeholder="問題の内容を具体的に入力してください（任意）" maxlength="500"></textarea>' +
+      '<div class="report-footer">' +
+        '<button class="btn-report-cancel" onclick="closeReportModal()">キャンセル</button>' +
+        '<button class="btn-report-submit" id="btn-report-submit" disabled onclick="submitReport()">通報する</button>' +
+      '</div>' +
+    '</div>';
+  document.querySelectorAll('#report-card-content input[name=report-reason]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      document.querySelectorAll('#report-card-content .report-reason-item').forEach(el => el.classList.remove('selected'));
+      radio.closest('.report-reason-item').classList.add('selected');
+      const noteEl = document.getElementById('report-note');
+      if (noteEl) noteEl.style.display = radio.value === 'other' ? 'block' : 'none';
+      const btn = document.getElementById('btn-report-submit');
+      if (btn) btn.disabled = false;
+    });
+  });
+}
+function closeReportModal() {
+  reportModal.classList.remove('visible');
+  reportTarget = null;
+}
+async function submitReport() {
+  if (!reportTarget || !currentUser) return;
+  const reasonEl = document.querySelector('#report-card-content input[name=report-reason]:checked');
+  if (!reasonEl) return;
+  const reason = reasonEl.value;
+  const noteEl = document.getElementById('report-note');
+  const note = reason === 'other' ? (noteEl?.value.trim().slice(0, 500) || null) : null;
+  const btn = document.getElementById('btn-report-submit');
+  if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+  const { error } = await sbClient.from('reports').insert({
+    reporter_id: currentUser.id,
+    target_type: reportTarget.type,
+    target_id:   reportTarget.id,
+    reason, note, status: 'pending',
+  });
+  if (error) {
+    if (error.code === '23505') { showReportResult('dup'); }
+    else { if (btn) { btn.disabled = false; btn.textContent = '通報する'; } showToast('通報の送信に失敗しました: ' + error.message); }
+    return;
+  }
+  showReportResult('ok');
+}
+function showReportResult(type) {
+  const isOk = type === 'ok';
+  document.getElementById('report-card-content').innerHTML =
+    '<div class="report-result">' +
+      '<div class="report-result-icon ' + type + '">' + (isOk ? '✓' : '!') + '</div>' +
+      '<p class="report-result-title">' + (isOk ? '通報を受け付けました' : 'すでに通報済みです') + '</p>' +
+      '<p class="report-result-desc">' + (isOk
+        ? '内容を確認し、ガイドライン違反が認められた場合は対応します。ご協力ありがとうございます。'
+        : 'この対象はすでに通報しています。') + '</p>' +
+      '<button class="btn-report-submit" onclick="closeReportModal()">閉じる</button>' +
+    '</div>';
+}
+document.getElementById('btn-report-close').addEventListener('click', closeReportModal);
+reportModal.addEventListener('click', e => { if (e.target === reportModal) closeReportModal(); });
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+(function() {
+  bootSupabase(getStoredKey()); showAuthForm('login');
+})();
+</script>
+</body>
+</html>
