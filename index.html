@@ -757,6 +757,7 @@ function mapBoardRow(r) {
     id: r.id, parentId: r.parent_id || null, name: r.name,
     colorIdx: r.color_idx || 0,
     userId: r.user_id, createdByEmail: r.created_by_email || '',
+    boardType: r.board_type || 'personal',
   };
 }
 
@@ -767,6 +768,7 @@ async function dbCreateBoard(name, parentId) {
     id, user_id: currentUser.id, name: name || 'ボード',
     parent_id: parentId || null, color_idx: 0,
     created_by_email: currentUser.email,
+    board_type: 'personal',
   }).select().single();
   if (error) { showToast('ボード作成エラー: ' + error.message); return null; }
   return mapBoardRow(data);
@@ -976,6 +978,7 @@ async function switchToBoard(boardId, keepPanelOpen) {
   applyTransform();
   centerOnFirstImage();
   updateFeaturedBar(); updateBreadcrumb(); updateCanvasFrame(); renderBoardList();
+  updateUploadUI();
   if (imgPanel.classList.contains('open')) renderImgPanel();
   if (!keepPanelOpen) closeBoardPanel();
   showLoading(false);
@@ -1060,7 +1063,7 @@ function renderBoardList() {
         '<div class="board-item-icon">' + icon + '</div>' +
         '<div class="board-item-info">' +
           '<div class="board-item-name">' + escHtml(board.name) + '</div>' +
-          '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件' : '') + '</div>' +
+          '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件 · ' : '') + (board.boardType === 'personal' ? '🔒 個人' : '🌐 公開') + '</div>' +
           '<div class="board-creator' + (isOwn ? ' me' : '') + '">' + escHtml(creatorLabel) + '</div>' +
         '</div>' +
         '<button class="btn-board-report" data-id="' + board.id + '" title="このボードを通報する">🚩</button>' +
@@ -1076,6 +1079,23 @@ function renderBoardList() {
   }
   renderLevel(null, 0);
   document.getElementById('board-count').textContent = boards.length;
+}
+
+// ── 個人ボード権限チェック ──────────────────────────────────────────────────────
+function currentBoardIsPersonal() {
+  const board = boards.find(b => b.id === currentBoardId);
+  return board && board.boardType === 'personal';
+}
+function canUploadToCurrentBoard() {
+  const board = boards.find(b => b.id === currentBoardId);
+  if (!board) return false;
+  return board.boardType !== 'personal' || board.userId === currentUser.id;
+}
+function updateUploadUI() {
+  const allowed = canUploadToCurrentBoard();
+  document.getElementById('btn-add-img').style.display = allowed ? '' : 'none';
+  if (!allowed) dropzone.style.display = 'none';
+  else if (images.length === 0) dropzone.style.display = '';
 }
 
 // ── Image upload ──────────────────────────────────────────────────────────────
@@ -1094,6 +1114,10 @@ canvas.addEventListener('drop', async e => {
 });
 
 async function handleImageUpload(file, dropEvent) {
+  if (!canUploadToCurrentBoard()) {
+    showToast('⚠️ 個人ボードには画像をアップロードできません');
+    return;
+  }
   const ext   = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const imgId = generateId();
   const path  = currentUser.id + '/' + imgId + '.' + ext;
@@ -1327,7 +1351,7 @@ function addCard(pin) {
         '<span class="card-time">' + pin.time + '</span>' +
         '<div class="card-actions">' +
           (pin.featured ? '<span class="badge-featured">注目</span>' : '') +
-          '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' +
+          (!currentBoardIsPersonal() ? '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' : '') +
           '<button class="btn-wavy" data-id="' + pin.id + '">〜 ' + pin.likes + '</button>' +
         '</div>' +
       '</div>' +
