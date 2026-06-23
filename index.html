@@ -291,6 +291,29 @@
   .img-wrap:hover .img-report-handle { opacity: 1; }
   .btn-board-report { background: none; border: none; cursor: pointer; color: #ddd; font-size: 13px; padding: 3px 4px; border-radius: 4px; flex-shrink: 0; transition: color 0.12s, background 0.12s; line-height: 1; }
   .btn-board-report:hover { color: #e53935; background: #ffebee; }
+  /* ── ボード作成モーダル ── */
+  #board-create-modal { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #board-create-modal.visible { display: flex; }
+  .bc-card { background: #fff; border-radius: 14px; padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 8px 40px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px; }
+  .bc-title { font-size: 16px; font-weight: 700; color: #222; }
+  .bc-field label { font-size: 12px; font-weight: 600; color: #555; display: block; margin-bottom: 6px; }
+  .bc-field input { width: 100%; border: 1.5px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 14px; outline: none; color: #333; font-family: inherit; }
+  .bc-field input:focus { border-color: #3d8b41; }
+  .bc-types { display: flex; flex-direction: column; gap: 8px; }
+  .bc-type-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1.5px solid #e0e0e0; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .bc-type-opt:hover { border-color: #b2d4b3; background: #f5fbf5; }
+  .bc-type-opt.selected { border-color: #3d8b41; background: #f0f7f0; }
+  .bc-type-opt input[type=radio] { margin-top: 3px; accent-color: #3d8b41; flex-shrink: 0; }
+  .bc-type-label { font-size: 13px; font-weight: 600; color: #333; }
+  .bc-type-desc { font-size: 11px; color: #888; margin-top: 2px; line-height: 1.5; }
+  .bc-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .bc-btn-cancel { background: #f5f5f5; color: #555; border: none; border-radius: 7px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .bc-btn-cancel:hover { background: #eee; }
+  .bc-btn-create { background: #3d8b41; color: #fff; border: none; border-radius: 7px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .bc-btn-create:hover { background: #4caf50; }
+  .btn-board-type { background: none; border: 1px solid #ddd; cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; line-height: 1.6; color: #999; transition: border-color 0.12s, background 0.12s; }
+  .btn-board-type.own:hover { border-color: #3d8b41; background: #f0f7f0; color: #2e6b31; }
+
   #report-modal { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.52); display: none; align-items: center; justify-content: center; padding: 16px; }
   #report-modal.visible { display: flex; }
   .report-card { background: #fff; border-radius: 12px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); font-family: 'Noto Sans JP','Hiragino Sans',sans-serif; }
@@ -585,6 +608,47 @@ create policy "users delete" on storage.objects for delete
   </div>
 </div>
 
+<!-- ── ボード作成モーダル ── -->
+<div id="board-create-modal">
+  <div class="bc-card">
+    <div class="bc-title">新しいボードを作成</div>
+    <div class="bc-field">
+      <label>ボード名</label>
+      <input id="bc-name-input" type="text" placeholder="ボード名を入力" maxlength="60">
+    </div>
+    <div class="bc-field">
+      <label>ボードの種類</label>
+      <div class="bc-types">
+        <label class="bc-type-opt selected">
+          <input type="radio" name="bc-type" value="public" checked>
+          <div>
+            <div class="bc-type-label">🌐 公開</div>
+            <div class="bc-type-desc">誰もが画像やコメントをアップ可能</div>
+          </div>
+        </label>
+        <label class="bc-type-opt">
+          <input type="radio" name="bc-type" value="personal">
+          <div>
+            <div class="bc-type-label">🔒 個人</div>
+            <div class="bc-type-desc">自分しか画像をアップできない。他ユーザーはコメントのみ</div>
+          </div>
+        </label>
+        <label class="bc-type-opt">
+          <input type="radio" name="bc-type" value="private">
+          <div>
+            <div class="bc-type-label">🔐 非公開</div>
+            <div class="bc-type-desc">自分からしか見えない</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    <div class="bc-actions">
+      <button class="bc-btn-cancel" id="bc-btn-cancel">キャンセル</button>
+      <button class="bc-btn-create" id="bc-btn-create">作成</button>
+    </div>
+  </div>
+</div>
+
 <input id="attach-file-input" type="file" accept="image/*" style="display:none">
 <div id="toast"></div>
 
@@ -762,21 +826,22 @@ function mapBoardRow(r) {
 }
 
 // ── DB helpers ───────────────────────────────────────────────────────────────
-async function dbCreateBoard(name, parentId) {
+async function dbCreateBoard(name, parentId, boardType) {
   const id = generateId();
   const { data, error } = await sbClient.from('boards').insert({
     id, user_id: currentUser.id, name: name || 'ボード',
     parent_id: parentId || null, color_idx: 0,
     created_by_email: currentUser.email,
-    board_type: 'personal',
+    board_type: boardType || 'public',
   }).select().single();
   if (error) { showToast('ボード作成エラー: ' + error.message); return null; }
   return mapBoardRow(data);
 }
 async function dbUpdateBoard(id, fields) {
   const m = {};
-  if (fields.name     !== undefined) m.name      = fields.name;
-  if (fields.colorIdx !== undefined) m.color_idx = fields.colorIdx;
+  if (fields.name      !== undefined) m.name       = fields.name;
+  if (fields.colorIdx  !== undefined) m.color_idx  = fields.colorIdx;
+  if (fields.boardType !== undefined) m.board_type = fields.boardType;
   await sbClient.from('boards').update(m).eq('id', id);
 }
 async function dbDeleteBoard(id) {
@@ -1063,7 +1128,14 @@ function renderBoardList() {
         '<div class="board-item-icon">' + icon + '</div>' +
         '<div class="board-item-info">' +
           '<div class="board-item-name">' + escHtml(board.name) + '</div>' +
-          '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件 · ' : '') + (board.boardType === 'personal' ? '🔒 個人' : '🌐 公開') + '</div>' +
+          '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件 · ' : '') +
+            (isOwn
+              ? '<button class="btn-board-type own" data-id="' + board.id + '" data-type="' + board.boardType + '">' +
+                  (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開') +
+                '</button>'
+              : (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開')
+            ) +
+          '</div>' +
           '<div class="board-creator' + (isOwn ? ' me' : '') + '">' + escHtml(creatorLabel) + '</div>' +
         '</div>' +
         '<button class="btn-board-report" data-id="' + board.id + '" title="このボードを通報する">🚩</button>' +
@@ -1071,6 +1143,7 @@ function renderBoardList() {
       item.addEventListener('click', e => {
         if (e.target.closest('.btn-board-del')) deleteBoard(board.id);
         else if (e.target.closest('.btn-board-report')) { e.stopPropagation(); openReportModal('board', board.id); }
+        else if (e.target.closest('.btn-board-type')) { e.stopPropagation(); cycleBoardType(board.id, e.target.closest('.btn-board-type').dataset.type); }
         else switchToBoard(board.id);
       });
       list.appendChild(item);
@@ -1089,7 +1162,16 @@ function currentBoardIsPersonal() {
 function canUploadToCurrentBoard() {
   const board = boards.find(b => b.id === currentBoardId);
   if (!board) return false;
-  return board.boardType !== 'personal' || board.userId === currentUser.id;
+  if (board.boardType === 'public') return true;
+  // personal or private: only owner can upload
+  return board.userId === currentUser.id;
+}
+function canAttachImageToComment() {
+  // 個人ボードでは他ユーザーはコメントに画像添付不可
+  const board = boards.find(b => b.id === currentBoardId);
+  if (!board) return false;
+  if (board.boardType === 'personal' && board.userId !== currentUser.id) return false;
+  return true;
 }
 function updateUploadUI() {
   const allowed = canUploadToCurrentBoard();
@@ -1351,7 +1433,7 @@ function addCard(pin) {
         '<span class="card-time">' + pin.time + '</span>' +
         '<div class="card-actions">' +
           (pin.featured ? '<span class="badge-featured">注目</span>' : '') +
-          (!currentBoardIsPersonal() ? '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' : '') +
+          (canAttachImageToComment() ? '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' : '') +
           '<button class="btn-wavy" data-id="' + pin.id + '">〜 ' + pin.likes + '</button>' +
         '</div>' +
       '</div>' +
@@ -1633,10 +1715,66 @@ boardNameInput.addEventListener('keydown', e => {
   if (e.key === 'Escape') { boardNameInput.value = (boards.find(b => b.id === currentBoardId) || {}).name || ''; boardNameInput.blur(); }
 });
 
+// ── Board create modal ────────────────────────────────────────────────────────
+let bcModalParentId = null; // null = root board
+function openBoardCreateModal(parentId) {
+  bcModalParentId = parentId || null;
+  const modal = document.getElementById('board-create-modal');
+  const defaultName = parentId ? '' : 'ボード ' + (boards.filter(b => !b.parentId).length + 1);
+  document.getElementById('bc-name-input').value = defaultName;
+  // reset selection to public
+  document.querySelectorAll('.bc-type-opt').forEach(el => {
+    el.classList.remove('selected');
+    el.querySelector('input').checked = false;
+  });
+  const pubOpt = document.querySelector('.bc-type-opt input[value="public"]');
+  if (pubOpt) { pubOpt.checked = true; pubOpt.closest('.bc-type-opt').classList.add('selected'); }
+  modal.classList.add('visible');
+  setTimeout(() => document.getElementById('bc-name-input').select(), 50);
+}
+function closeBoardCreateModal() {
+  document.getElementById('board-create-modal').classList.remove('visible');
+}
+document.querySelectorAll('.bc-type-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.bc-type-opt').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+    opt.querySelector('input').checked = true;
+  });
+});
+document.getElementById('bc-btn-cancel').addEventListener('click', closeBoardCreateModal);
+document.getElementById('board-create-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('board-create-modal')) closeBoardCreateModal();
+});
+document.getElementById('bc-btn-create').addEventListener('click', async () => {
+  const nameVal = document.getElementById('bc-name-input').value.trim() || (bcModalParentId ? '子ボード' : 'ボード');
+  const typeVal = document.querySelector('.bc-type-opt input:checked')?.value || 'public';
+  closeBoardCreateModal();
+  const b = await dbCreateBoard(nameVal, bcModalParentId, typeVal);
+  if (!b) return;
+  boards.push(b);
+  currentBoardId = null;
+  await switchToBoard(b.id, !bcModalParentId);
+});
+
+// ── Board type cycle ──────────────────────────────────────────────────────────
+const BOARD_TYPE_CYCLE = ['public', 'personal', 'private'];
+const BOARD_TYPE_LABEL = { public: '🌐 公開', personal: '🔒 個人', private: '🔐 非公開' };
+async function cycleBoardType(boardId, currentType) {
+  const idx = BOARD_TYPE_CYCLE.indexOf(currentType);
+  const nextType = BOARD_TYPE_CYCLE[(idx + 1) % BOARD_TYPE_CYCLE.length];
+  const board = boards.find(b => b.id === boardId);
+  if (!board) return;
+  board.boardType = nextType;
+  await dbUpdateBoard(boardId, { boardType: nextType });
+  renderBoardList();
+  if (boardId === currentBoardId) updateUploadUI();
+  showToast(BOARD_TYPE_LABEL[nextType] + ' に変更しました');
+}
+
 // ── Board buttons ─────────────────────────────────────────────────────────────
-document.getElementById('btn-add-child').addEventListener('click', async () => {
-  const b = await dbCreateBoard(null, currentBoardId); if (!b) return;
-  boards.push(b); currentBoardId = null; await switchToBoard(b.id);
+document.getElementById('btn-add-child').addEventListener('click', () => {
+  openBoardCreateModal(currentBoardId);
 });
 document.getElementById('btn-boards').addEventListener('click', () => {
   boardPanel.classList.contains('open') ? closeBoardPanel() : openBoardPanel();
@@ -1646,10 +1784,8 @@ document.getElementById('btn-close-panel').onclick = () => {
   setPinState(boardPanel, document.getElementById('btn-pin-board'), false);
   boardPanel.classList.remove('open');
 };
-document.getElementById('btn-new-board').addEventListener('click', async () => {
-  const count = boards.filter(b => !b.parentId).length;
-  const b = await dbCreateBoard('ボード ' + (count + 1), null); if (!b) return;
-  boards.push(b); currentBoardId = null; await switchToBoard(b.id, true);
+document.getElementById('btn-new-board').addEventListener('click', () => {
+  openBoardCreateModal(null);
 });
 document.addEventListener('click', e => {
   if (!boardPanelPinned && boardPanel.classList.contains('open') && !boardPanel.contains(e.target) && !e.target.closest('#btn-boards')) {
