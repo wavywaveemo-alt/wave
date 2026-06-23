@@ -859,7 +859,13 @@ async function dbCreateBoard(name, parentId, boardType, applicationReason) {
       requester_id: currentUser.id,
       reason: applicationReason || null,
     });
-    if (reqErr) console.warn('申請レコード作成エラー:', reqErr.message);
+    if (reqErr) {
+      showToast('申請エラー: ' + reqErr.message);
+      console.error('board_requests INSERT error:', reqErr);
+      // ボードをロールバック
+      await sbClient.from('boards').delete().eq('id', id);
+      return null;
+    }
   }
   return mapBoardRow(data);
 }
