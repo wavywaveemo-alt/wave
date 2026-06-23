@@ -311,6 +311,10 @@
   .bc-btn-cancel:hover { background: #eee; }
   .bc-btn-create { background: #3d8b41; color: #fff; border: none; border-radius: 7px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
   .bc-btn-create:hover { background: #4caf50; }
+  .bc-public-note { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #795548; line-height: 1.6; display: none; }
+  .bc-public-note.visible { display: block; }
+  .bc-field textarea { width: 100%; border: 1.5px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 13px; outline: none; color: #333; font-family: inherit; resize: vertical; min-height: 64px; line-height: 1.5; }
+  .bc-field textarea:focus { border-color: #3d8b41; }
   .btn-board-type { background: none; border: 1px solid #ddd; cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; line-height: 1.6; color: #999; transition: border-color 0.12s, background 0.12s; }
   .btn-board-type.own:hover { border-color: #3d8b41; background: #f0f7f0; color: #2e6b31; }
 
@@ -642,6 +646,13 @@ create policy "users delete" on storage.objects for delete
         </label>
       </div>
     </div>
+    <div class="bc-public-note" id="bc-public-note">
+      📋 公開ボードは管理者の承認が必要です。承認されるまでは自分だけが見られます。
+    </div>
+    <div class="bc-field" id="bc-reason-field" style="display:none">
+      <label>申請理由（任意）</label>
+      <textarea id="bc-reason-input" placeholder="どんなボードか、公開したい理由など..."></textarea>
+    </div>
     <div class="bc-actions">
       <button class="bc-btn-cancel" id="bc-btn-cancel">キャンセル</button>
       <button class="bc-btn-create" id="bc-btn-create">作成</button>
@@ -822,19 +833,34 @@ function mapBoardRow(r) {
     colorIdx: r.color_idx || 0,
     userId: r.user_id, createdByEmail: r.created_by_email || '',
     boardType: r.board_type || 'personal',
+    boardStatus: r.board_status || 'active',
   };
 }
 
 // ── DB helpers ───────────────────────────────────────────────────────────────
-async function dbCreateBoard(name, parentId, boardType) {
+async function dbCreateBoard(name, parentId, boardType, applicationReason) {
   const id = generateId();
+  // 公開ボードは申請承認まで pending 状態
+  const isPublicRequest = boardType === 'public';
+  const boardStatus = isPublicRequest ? 'pending' : 'active';
   const { data, error } = await sbClient.from('boards').insert({
     id, user_id: currentUser.id, name: name || 'ボード',
     parent_id: parentId || null, color_idx: 0,
     created_by_email: currentUser.email,
     board_type: boardType || 'public',
+    board_status: boardStatus,
   }).select().single();
   if (error) { showToast('ボード作成エラー: ' + error.message); return null; }
+  // 公開ボードの場合は申請レコードも作成
+  if (isPublicRequest) {
+    const { error: reqErr } = await sbClient.from('board_requests').insert({
+      board_id: id,
+      board_name: name || 'ボード',
+      requester_id: currentUser.id,
+      reason: applicationReason || null,
+    });
+    if (reqErr) console.warn('申請レコード作成エラー:', reqErr.message);
+  }
   return mapBoardRow(data);
 }
 async function dbUpdateBoard(id, fields) {
@@ -1129,11 +1155,15 @@ function renderBoardList() {
         '<div class="board-item-info">' +
           '<div class="board-item-name">' + escHtml(board.name) + '</div>' +
           '<div class="board-item-meta">' + (isCur ? images.length + ' 枚 · ' + pins.length + ' 件 · ' : '') +
-            (isOwn
-              ? '<button class="btn-board-type own" data-id="' + board.id + '" data-type="' + board.boardType + '">' +
-                  (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開') +
-                '</button>'
-              : (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開')
+            (board.boardStatus === 'pending'
+              ? '<span style="color:#e65100;font-size:10px;">📋 申請中</span>'
+              : board.boardStatus === 'rejected'
+                ? '<span style="color:#c62828;font-size:10px;">❌ 却下</span>'
+                : isOwn
+                  ? '<button class="btn-board-type own" data-id="' + board.id + '" data-type="' + board.boardType + '">' +
+                      (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開') +
+                    '</button>'
+                  : (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開')
             ) +
           '</div>' +
           '<div class="board-creator' + (isOwn ? ' me' : '') + '">' + escHtml(creatorLabel) + '</div>' +
@@ -1729,17 +1759,25 @@ function openBoardCreateModal(parentId) {
   });
   const pubOpt = document.querySelector('.bc-type-opt input[value="public"]');
   if (pubOpt) { pubOpt.checked = true; pubOpt.closest('.bc-type-opt').classList.add('selected'); }
+  document.getElementById('bc-reason-input').value = '';
+  updateBcPublicUI();
   modal.classList.add('visible');
   setTimeout(() => document.getElementById('bc-name-input').select(), 50);
 }
 function closeBoardCreateModal() {
   document.getElementById('board-create-modal').classList.remove('visible');
 }
+function updateBcPublicUI() {
+  const isPublic = document.querySelector('.bc-type-opt input:checked')?.value === 'public';
+  document.getElementById('bc-public-note').classList.toggle('visible', isPublic);
+  document.getElementById('bc-reason-field').style.display = isPublic ? '' : 'none';
+}
 document.querySelectorAll('.bc-type-opt').forEach(opt => {
   opt.addEventListener('click', () => {
     document.querySelectorAll('.bc-type-opt').forEach(o => o.classList.remove('selected'));
     opt.classList.add('selected');
     opt.querySelector('input').checked = true;
+    updateBcPublicUI();
   });
 });
 document.getElementById('bc-btn-cancel').addEventListener('click', closeBoardCreateModal);
@@ -1747,14 +1785,16 @@ document.getElementById('board-create-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('board-create-modal')) closeBoardCreateModal();
 });
 document.getElementById('bc-btn-create').addEventListener('click', async () => {
-  const nameVal = document.getElementById('bc-name-input').value.trim() || (bcModalParentId ? '子ボード' : 'ボード');
-  const typeVal = document.querySelector('.bc-type-opt input:checked')?.value || 'public';
+  const nameVal   = document.getElementById('bc-name-input').value.trim() || (bcModalParentId ? '子ボード' : 'ボード');
+  const typeVal   = document.querySelector('.bc-type-opt input:checked')?.value || 'public';
+  const reasonVal = document.getElementById('bc-reason-input').value.trim();
   closeBoardCreateModal();
-  const b = await dbCreateBoard(nameVal, bcModalParentId, typeVal);
+  const b = await dbCreateBoard(nameVal, bcModalParentId, typeVal, reasonVal);
   if (!b) return;
   boards.push(b);
   currentBoardId = null;
   await switchToBoard(b.id, !bcModalParentId);
+  if (typeVal === 'public') showToast('📋 公開申請を送信しました。承認をお待ちください。');
 });
 
 // ── Board type cycle ──────────────────────────────────────────────────────────
