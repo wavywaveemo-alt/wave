@@ -1865,32 +1865,32 @@ document.getElementById('public-apply-modal').addEventListener('click', e => {
 document.getElementById('pa-btn-submit').addEventListener('click', async () => {
   if (!paModalBoardId) return;
   const reason = document.getElementById('pa-reason-input').value.trim() || null;
-  const board = boards.find(b => b.id === paModalBoardId);
-  if (!board) { closePublicApplyModal(); return; }
+  const targetBoard = boards.find(b => String(b.id) === String(paModalBoardId));
+  if (!targetBoard) { closePublicApplyModal(); return; }
   closePublicApplyModal();
 
   // board_type を public に、board_status を pending に更新
   const { error: upErr } = await sbClient.from('boards').update({
     board_type: 'public', board_status: 'pending',
-  }).eq('id', paModalBoardId);
+  }).eq('id', targetBoard.id);
   if (upErr) { showToast('エラー: ' + upErr.message); return; }
 
   // board_requests に申請レコードを追加
   const { error: reqErr } = await sbClient.from('board_requests').insert({
-    board_id: paModalBoardId,
-    board_name: board.name,
+    board_id: targetBoard.id,
+    board_name: targetBoard.name,
     requester_id: currentUser.id,
     reason,
   });
   if (reqErr) {
     // ロールバック
-    await sbClient.from('boards').update({ board_type: board.boardType, board_status: 'active' }).eq('id', paModalBoardId);
+    await sbClient.from('boards').update({ board_type: targetBoard.boardType, board_status: 'active' }).eq('id', targetBoard.id);
     showToast('申請エラー: ' + reqErr.message);
     return;
   }
 
-  board.boardType = 'public';
-  board.boardStatus = 'pending';
+  targetBoard.boardType = 'public';
+  targetBoard.boardStatus = 'pending';
   renderBoardList();
   showToast('📋 公開申請を送信しました。承認をお待ちください。');
 });
