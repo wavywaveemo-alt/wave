@@ -68,6 +68,32 @@
   @media (min-width: 1100px) { #user-email { display: block; } }
   #btn-logout { width: 28px; height: 28px; border: 1px solid #e0e0e0; border-radius: 5px; cursor: pointer; background: #fafafa; font-size: 14px; padding: 0; color: #aaa; flex-shrink: 0; transition: background 0.12s, color 0.12s; display: flex; align-items: center; justify-content: center; }
   #btn-logout:hover { background: #ffebee; border-color: #e57373; color: #c62828; }
+  #btn-invite { height: 28px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: background 0.12s; }
+  #btn-invite:hover { background: #dff0df; }
+
+  /* invite modal */
+  #invite-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #invite-modal.visible { display: flex; }
+  .invite-card { background: #fff; border-radius: 16px; padding: 28px 28px 24px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px; }
+  .invite-card h2 { font-size: 17px; color: #2e6b31; }
+  .invite-desc { font-size: 13px; color: #666; line-height: 1.6; }
+  .invite-link-box { display: flex; gap: 8px; align-items: center; }
+  .invite-link-box input { flex: 1; border: 1.5px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 12px; font-family: monospace; color: #444; outline: none; background: #fafafa; }
+  .invite-link-box input:focus { border-color: #3d8b41; }
+  .btn-copy-link { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 9px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-copy-link:hover { background: #4caf50; }
+  .btn-gen-invite { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-gen-invite:hover { background: #4caf50; }
+  .btn-gen-invite:disabled { background: #b2cfb3; cursor: not-allowed; }
+  .invite-list { display: flex; flex-direction: column; gap: 6px; }
+  .invite-item { display: flex; align-items: center; justify-content: space-between; background: #f5f5f5; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+  .invite-item-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .invite-item-status.pending  { background: #fff3e0; color: #e65100; }
+  .invite-item-status.accepted { background: #e8f5e9; color: #2e7d32; }
+  .invite-quota { font-size: 12px; color: #888; text-align: right; }
+  .invite-error { color: #e53935; font-size: 12px; }
+  #btn-invite-close { background: transparent; color: #999; border: 1px solid #ddd; border-radius: 8px; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; align-self: flex-end; }
+  #btn-invite-close:hover { background: #f5f5f5; }
   #btn-help { width: 28px; height: 28px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 13px; font-weight: 700; color: #3d8b41; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
   #btn-help:hover { background: #dff0df; }
 
@@ -377,6 +403,8 @@
   <div id="form-register" class="auth-card" style="display:none">
     <div class="auth-logo"><div class="auth-logo-icon">&#12316;</div><div class="auth-logo-text">WAVE</div></div>
     <h2 class="auth-title">新規登録</h2>
+    <div id="reg-invite-badge" style="display:none;font-size:12px;background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:6px 10px;font-weight:600;">✓ 招待リンク確認済み</div>
+    <div id="reg-no-invite-badge" style="display:none;font-size:12px;background:#fff3e0;color:#e65100;border-radius:6px;padding:6px 10px;font-weight:600;line-height:1.6;">⚠ 招待リンクが必要です。招待を受けた方は招待リンクから開いてください。</div>
     <div class="auth-field"><label>メールアドレス</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="auth-field"><label>パスワード <span style="color:#bbb;font-weight:400">(6文字以上)</span></label><input type="password" id="reg-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="new-password"></div>
     <div id="reg-error" class="auth-error"></div>
@@ -558,6 +586,7 @@ create policy "users delete" on storage.objects for delete
     <button id="btn-help" title="使い方">?</button>
     <div id="user-info">
       <span id="user-email" title="ログイン中のアカウント"></span>
+      <button id="btn-invite" title="友達を招待">📨 招待</button>
       <button id="btn-logout" title="ログアウト">⏻</button>
     </div>
   </div>
@@ -625,6 +654,27 @@ create policy "users delete" on storage.objects for delete
 </div>
 
 <!-- ── ボード作成モーダル ── -->
+<div id="invite-modal">
+  <div class="invite-card">
+    <h2>📨 友達を招待</h2>
+    <p class="invite-desc" id="invite-desc">招待リンクを生成して、友達に送ってください。リンクを持つ人だけが登録できます。</p>
+    <div id="invite-error" class="invite-error"></div>
+    <div id="invite-link-section" style="display:none">
+      <div class="invite-link-box">
+        <input type="text" id="invite-link-input" readonly>
+        <button class="btn-copy-link" id="btn-copy-link">コピー</button>
+      </div>
+    </div>
+    <button class="btn-gen-invite" id="btn-gen-invite">招待リンクを生成</button>
+    <div id="invite-quota" class="invite-quota"></div>
+    <div id="invite-list-section" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">発行済みの招待</div>
+      <div class="invite-list" id="invite-list"></div>
+    </div>
+    <button id="btn-invite-close">閉じる</button>
+  </div>
+</div>
+
 <div id="public-apply-modal">
   <div class="pa-card">
     <h3>🌐 公開ボード申請</h3>
@@ -702,7 +752,11 @@ function bootSupabase(key) {
   sbClient = supabase.createClient(SUPABASE_URL, key);
   sbClient.auth.onAuthStateChange((ev, session) => {
     if (session && session.user) showApp(session.user);
-    else showAuthForm('login');
+    else {
+      // 招待トークンありなら登録フォームを先に表示
+      if (pendingInviteToken) { updateRegisterInviteBadge(); showAuthForm('register'); }
+      else showAuthForm('login');
+    }
   });
 }
 
@@ -736,6 +790,24 @@ async function doLogin() {
   btn.disabled = false; btn.textContent = 'ログイン';
   if (error) err.textContent = xlateErr(error.message);
 }
+// ── 招待トークン（URLパラメータから取得）────────────────────────────────────
+let pendingInviteToken = null;
+(function captureInviteToken() {
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get('invite');
+  if (t) {
+    pendingInviteToken = t;
+    // URLからトークンを消す（履歴汚染を防ぐ）
+    const clean = window.location.pathname + (window.location.hash || '');
+    history.replaceState(null, '', clean);
+  }
+})();
+
+function updateRegisterInviteBadge() {
+  document.getElementById('reg-invite-badge').style.display    = pendingInviteToken ? 'block' : 'none';
+  document.getElementById('reg-no-invite-badge').style.display = pendingInviteToken ? 'none'  : 'block';
+}
+
 document.getElementById('btn-register').onclick = doRegister;
 document.getElementById('reg-password').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
 async function doRegister() {
@@ -748,14 +820,17 @@ async function doRegister() {
   if (!email || !pass) { err.textContent = 'メールアドレスとパスワードを入力してください'; return; }
   if (pass.length < 6) { err.textContent = 'パスワードは6文字以上にしてください'; return; }
   btn.disabled = true; btn.textContent = '登録中...';
-  const { error } = await sbClient.auth.signUp({ email, password: pass });
+  const signUpOpts = pendingInviteToken
+    ? { email, password: pass, options: { data: { invite_token: pendingInviteToken } } }
+    : { email, password: pass };
+  const { error } = await sbClient.auth.signUp(signUpOpts);
   btn.disabled = false; btn.textContent = '登録する';
   if (error) err.textContent = xlateErr(error.message);
   else { succ.textContent = '✓ 登録完了！確認メールをご確認ください。'; succ.style.display = 'block'; }
 }
-document.getElementById('to-register').onclick   = () => showAuthForm('register');
-document.getElementById('to-login').onclick       = () => showAuthForm('login');
-document.getElementById('btn-logout').onclick = () => sbClient.auth.signOut();
+document.getElementById('to-register').onclick = () => { updateRegisterInviteBadge(); showAuthForm('register'); };
+document.getElementById('to-login').onclick     = () => showAuthForm('login');
+document.getElementById('btn-logout').onclick   = () => sbClient.auth.signOut();
 
 function xlateErr(msg) {
   if (!msg) return '不明なエラー';
@@ -764,7 +839,98 @@ function xlateErr(msg) {
   if (msg.includes('User already registered'))   return 'このメールアドレスは既に登録されています';
   if (msg.includes('Password should be at least')) return 'パスワードは6文字以上にしてください';
   if (msg.includes('rate limit') || msg.includes('429')) return 'しばらく時間をおいてから再試行してください';
+  if (msg.includes('招待リンクが必要') || msg.includes('招待リンクが無効')) return msg;
+  if (msg.includes('Signups not allowed')) return '招待リンクから登録してください';
   return msg;
+}
+
+// ── 招待モーダル ──────────────────────────────────────────────────────────────
+let currentUserRole = 'user';
+
+document.getElementById('btn-invite').onclick = openInviteModal;
+document.getElementById('btn-invite-close').onclick = () => document.getElementById('invite-modal').classList.remove('visible');
+document.getElementById('invite-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('invite-modal')) document.getElementById('invite-modal').classList.remove('visible');
+});
+
+async function openInviteModal() {
+  document.getElementById('invite-modal').classList.add('visible');
+  document.getElementById('invite-error').textContent = '';
+  document.getElementById('invite-link-section').style.display = 'none';
+  await loadInviteList();
+}
+
+async function loadInviteList() {
+  const { data, error } = await sbClient.rpc('get_my_invitations');
+  const listEl = document.getElementById('invite-list');
+  const listSection = document.getElementById('invite-list-section');
+  const quotaEl = document.getElementById('invite-quota');
+  const genBtn  = document.getElementById('btn-gen-invite');
+
+  if (error) { document.getElementById('invite-error').textContent = 'エラー: ' + error.message; return; }
+
+  const invites = data || [];
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'moderator';
+  const usedCount = invites.length;
+  const maxCount  = isAdmin ? null : 2;
+
+  // クォータ表示
+  if (isAdmin) {
+    quotaEl.textContent = '発行済み: ' + usedCount + ' 件（無制限）';
+  } else {
+    quotaEl.textContent = '招待枠: ' + usedCount + ' / 2 件使用';
+    genBtn.disabled = usedCount >= 2;
+  }
+
+  // 一覧表示
+  if (invites.length === 0) {
+    listSection.style.display = 'none';
+  } else {
+    listSection.style.display = 'block';
+    listEl.innerHTML = invites.map(inv => {
+      const date = new Date(inv.created_at).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
+      const link = location.origin + location.pathname + '?invite=' + inv.token;
+      const statusLabel = inv.status === 'accepted' ? '使用済み' : '未使用';
+      return '<div class="invite-item">'
+        + '<div>'
+        + '<div style="font-family:monospace;font-size:11px;color:#666;margin-bottom:2px">' + inv.token.slice(0, 8) + '…</div>'
+        + '<div style="font-size:11px;color:#aaa">' + date + '</div>'
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px">'
+        + (inv.status === 'pending'
+            ? '<button onclick="copyInviteLink(\'' + escHtml(link) + '\')" style="font-size:11px;padding:3px 8px;border:1px solid #b2cfb3;border-radius:4px;cursor:pointer;background:#f0f7f0;color:#2e6b31">コピー</button>'
+            : '')
+        + '<span class="invite-item-status ' + inv.status + '">' + statusLabel + '</span>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+}
+
+document.getElementById('btn-gen-invite').onclick = async function() {
+  const btn = this;
+  btn.disabled = true; btn.textContent = '生成中...';
+  document.getElementById('invite-error').textContent = '';
+  const { data: token, error } = await sbClient.rpc('create_invitation');
+  btn.disabled = false; btn.textContent = '招待リンクを生成';
+  if (error) {
+    document.getElementById('invite-error').textContent = error.message;
+    return;
+  }
+  const link = location.origin + location.pathname + '?invite=' + token;
+  const linkInput = document.getElementById('invite-link-input');
+  linkInput.value = link;
+  document.getElementById('invite-link-section').style.display = 'block';
+  await loadInviteList();
+};
+
+document.getElementById('btn-copy-link').onclick = function() {
+  const val = document.getElementById('invite-link-input').value;
+  copyInviteLink(val);
+};
+
+function copyInviteLink(link) {
+  navigator.clipboard.writeText(link).then(() => showToast('招待リンクをコピーしました'));
 }
 
 // ── Setup modal ──────────────────────────────────────────────────────────────
@@ -827,6 +993,9 @@ async function showApp(user) {
   document.getElementById('user-email').textContent = user.email;
   boards = []; pins = []; images = []; colorIdx = 0; currentBoardId = null;
   clearCanvas();
+  // ロール取得（招待クォータ判定用）
+  const { data: prof } = await sbClient.from('profiles').select('role').eq('id', user.id).single();
+  if (prof) currentUserRole = prof.role || 'user';
   const ok = await checkDBSetup();
   if (ok) { await init(); showHelpIfFirst(); }
 }
