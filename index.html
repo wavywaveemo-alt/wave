@@ -185,6 +185,7 @@
   .img-wrap:hover .img-scale-handle,
   .img-wrap:hover .img-replace-handle,
   .img-wrap:hover .img-frame-handle { opacity: 1; }
+  .img-wrap:hover .img-wavy-bar { opacity: 1; pointer-events: auto; }
   .btn-rotate-card { background: none; border: none; cursor: crosshair; font-size: 12px; color: #ccc; padding: 2px 3px; line-height: 1; border-radius: 3px; transition: color 0.12s; touch-action: none; user-select: none; }
   .btn-rotate-card:hover { color: #888; background: rgba(0,0,0,0.06); }
   .card-scale-handle { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; cursor: nwse-resize; opacity: 0; z-index: 11; user-select: none; border-radius: 0 0 3px 0; }
@@ -219,10 +220,23 @@
   .card-time { font-size: 9px; color: #999; }
   .card-actions { display: flex; gap: 6px; align-items: center; }
   .badge-featured { font-size: 9px; background: #ff8f00; color: #fff; border-radius: 10px; padding: 1px 6px; }
-  .btn-wavy { background: rgba(61,139,65,0.1); border: none; border-radius: 12px; padding: 4px 9px; cursor: pointer; font-size: 11px; color: #3d8b41; font-family: inherit; font-weight: 700; transition: background 0.12s, transform 0.1s; }
-  .btn-wavy:hover { background: rgba(61,139,65,0.22); }
-  @keyframes wave-pop { 0%,100%{transform:scale(1)} 40%{transform:scale(1.18)} 70%{transform:scale(0.94)} }
-  .btn-wavy.pop { animation: wave-pop 0.3s ease; }
+  @keyframes wave-pop { 0%,100%{transform:scale(1)} 40%{transform:scale(1.22)} 70%{transform:scale(0.92)} }
+  @keyframes wavy-float { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-55px) scale(1.6)} }
+  .wavy-float { position:absolute; pointer-events:none; font-size:22px; animation:wavy-float 0.8s ease-out forwards; z-index:9999; }
+  /* ピン用Wavy反応バー */
+  .wavy-bar { display:flex; gap:3px; flex-wrap:wrap; margin-top:8px; }
+  .wavy-btn { background:rgba(0,0,0,0.06); border:none; border-radius:10px; padding:3px 7px; cursor:pointer; font-size:12px; font-family:inherit; transition:background 0.12s,transform 0.1s; display:flex; align-items:center; gap:2px; }
+  .wavy-btn:hover { background:rgba(61,139,65,0.18); transform:scale(1.12); }
+  .wavy-btn.active { background:rgba(61,139,65,0.25); box-shadow:0 0 0 1.5px rgba(61,139,65,0.4); }
+  .wavy-btn.pop { animation:wave-pop 0.35s ease; }
+  .wavy-count { font-size:10px; font-weight:700; color:#3d8b41; }
+  /* 画像用Wavy反応バー */
+  .img-wavy-bar { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.68); border-radius:14px; padding:5px 10px; display:flex; gap:5px; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:10; white-space:nowrap; }
+  .img-wrap:hover .img-wavy-bar { opacity:1; pointer-events:auto; }
+  .img-wavy-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 5px; border-radius:8px; transition:background 0.1s,transform 0.12s; display:flex; align-items:center; gap:2px; color:#fff; }
+  .img-wavy-btn:hover { background:rgba(255,255,255,0.2); transform:scale(1.18); }
+  .img-wavy-btn.active { background:rgba(109,191,103,0.4); }
+  .img-wavy-count { font-size:10px; font-weight:700; color:#a8e6a3; }
   .btn-attach { background: rgba(0,0,0,0.06); border: none; border-radius: 10px; padding: 3px 7px; cursor: pointer; font-size: 11px; color: #888; font-family: inherit; line-height: 1; }
   .btn-attach:hover { background: rgba(0,0,0,0.12); }
   .btn-expand { width: 100%; background: rgba(0,0,0,0.05); border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px; color: #888; font-family: inherit; margin-top: 7px; text-align: left; transition: background 0.12s; }
@@ -745,6 +759,146 @@ const STORAGE_BUCKET = 'wave-images';
 
 let sbClient = null, currentUser = null;
 
+// ── Wavy反応システム ──────────────────────────────────────────────────────────
+const WAVY_TYPES = [
+  { key: 'surge',     emoji: '🌊', label: '感動' },
+  { key: 'ripple',    emoji: '〜', label: 'いいね' },
+  { key: 'vortex',    emoji: '🌀', label: '夢中' },
+  { key: 'lightning', emoji: '⚡', label: '衝撃' },
+  { key: 'bubble',    emoji: '🫧', label: 'かわいい' },
+];
+let reactionData = {}; // key: `${type}_${id}` → { surge:N, ripple:N, ... }
+let myReactions  = new Set(); // `${type}_${id}_${reaction}`
+
+function wavyBarHTML(targetType, targetId) {
+  const k = targetType + '_' + targetId;
+  const counts = reactionData[k] || {};
+  return '<div class="wavy-bar">' +
+    WAVY_TYPES.map(t => {
+      const n = counts[t.key] || 0;
+      const active = myReactions.has(k + '_' + t.key) ? ' active' : '';
+      return '<button class="wavy-btn' + active + '" data-rtype="' + targetType + '" data-rid="' + targetId + '" data-reaction="' + t.key + '" title="' + t.label + '">'
+        + t.emoji + (n > 0 ? ' <span class="wavy-count">' + n + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+}
+
+function imgWavyBarEl(targetId) {
+  const bar = document.createElement('div');
+  bar.className = 'img-wavy-bar'; bar.dataset.imgid = targetId;
+  const k = 'image_' + targetId;
+  const counts = reactionData[k] || {};
+  WAVY_TYPES.forEach(t => {
+    const n = counts[t.key] || 0;
+    const btn = document.createElement('button');
+    btn.className = 'img-wavy-btn' + (myReactions.has(k + '_' + t.key) ? ' active' : '');
+    btn.dataset.rtype = 'image'; btn.dataset.rid = targetId; btn.dataset.reaction = t.key;
+    btn.title = t.label;
+    btn.innerHTML = t.emoji + (n > 0 ? ' <span class="img-wavy-count">' + n + '</span>' : '');
+    bar.appendChild(btn);
+  });
+  return bar;
+}
+
+async function toggleReaction(targetType, targetId, reaction) {
+  const k   = targetType + '_' + targetId;
+  const mk  = k + '_' + reaction;
+  const isActive = myReactions.has(mk);
+
+  if (isActive) {
+    const { error } = await sbClient.from('reactions').delete()
+      .eq('user_id', currentUser.id).eq('target_type', targetType)
+      .eq('target_id', targetId).eq('reaction', reaction);
+    if (error) { showToast('反応エラー: ' + error.message); return; }
+    myReactions.delete(mk);
+    if (reactionData[k]) reactionData[k][reaction] = Math.max(0, (reactionData[k][reaction] || 1) - 1);
+  } else {
+    const { error } = await sbClient.from('reactions').insert({
+      user_id: currentUser.id, target_type: targetType, target_id: +targetId, reaction,
+    });
+    if (error) { showToast('反応エラー: ' + error.message); return; }
+    myReactions.add(mk);
+    if (!reactionData[k]) reactionData[k] = {};
+    reactionData[k][reaction] = (reactionData[k][reaction] || 0) + 1;
+    spawnWavyFloat(targetType, targetId, reaction);
+  }
+
+  updateWavyBar(targetType, targetId);
+
+  // ピンのfeaturedロジック（総反応数≥3で注目）
+  if (targetType === 'pin') {
+    const pin = pins.find(p => p.id == targetId);
+    if (pin && !pin.featured) {
+      const total = Object.values(reactionData[k] || {}).reduce((a, b) => a + b, 0);
+      if (total >= 3) {
+        pin.featured = true;
+        await dbUpdatePin(pin.id, { featured: true });
+        world.querySelector('.pin-dot[data-id="' + pin.id + '"]')?.classList.add('featured');
+        const card = world.querySelector('.card[data-id="' + pin.id + '"]');
+        if (card) {
+          const actions = card.querySelector('.card-actions');
+          if (actions && !actions.querySelector('.badge-featured')) {
+            const badge = document.createElement('span');
+            badge.className = 'badge-featured'; badge.textContent = '注目';
+            actions.insertBefore(badge, actions.firstChild);
+          }
+        }
+        updateFeaturedBar();
+      }
+    }
+  }
+}
+
+function updateWavyBar(targetType, targetId) {
+  const k = targetType + '_' + targetId;
+  const counts = reactionData[k] || {};
+  // ピン用（.wavy-btn）
+  if (targetType === 'pin') {
+    const card = world.querySelector('.card[data-id="' + targetId + '"]');
+    if (!card) return;
+    WAVY_TYPES.forEach(t => {
+      const btn = card.querySelector('.wavy-btn[data-reaction="' + t.key + '"]');
+      if (!btn) return;
+      const n = counts[t.key] || 0;
+      const active = myReactions.has(k + '_' + t.key);
+      btn.classList.toggle('active', active);
+      btn.innerHTML = t.emoji + (n > 0 ? ' <span class="wavy-count">' + n + '</span>' : '');
+      btn.dataset.rtype = targetType; btn.dataset.rid = targetId; btn.dataset.reaction = t.key;
+    });
+  }
+  // 画像用（.img-wavy-btn）
+  if (targetType === 'image') {
+    const bar = world.querySelector('.img-wavy-bar[data-imgid="' + targetId + '"]');
+    if (!bar) return;
+    WAVY_TYPES.forEach(t => {
+      const btn = bar.querySelector('.img-wavy-btn[data-reaction="' + t.key + '"]');
+      if (!btn) return;
+      const n = counts[t.key] || 0;
+      const active = myReactions.has(k + '_' + t.key);
+      btn.classList.toggle('active', active);
+      btn.innerHTML = t.emoji + (n > 0 ? ' <span class="img-wavy-count">' + n + '</span>' : '');
+    });
+  }
+}
+
+function spawnWavyFloat(targetType, targetId, reaction) {
+  const emoji = WAVY_TYPES.find(t => t.key === reaction)?.emoji || '〜';
+  let anchor;
+  if (targetType === 'pin') {
+    anchor = world.querySelector('.card[data-id="' + targetId + '"] .wavy-btn[data-reaction="' + reaction + '"]');
+  } else {
+    anchor = world.querySelector('.img-wavy-btn[data-rid="' + targetId + '"][data-reaction="' + reaction + '"]');
+  }
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'wavy-float';
+  el.textContent = emoji;
+  el.style.left = (rect.left + rect.width / 2 - 11) + 'px';
+  el.style.top  = (rect.top - 10) + 'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
 function getStoredKey() {
   return HARDCODED_KEY;
 }
@@ -1116,6 +1270,26 @@ async function dbLoadBoardContent(boardId) {
     userId: r.user_id, createdByEmail: r.created_by_email || '',
     replies: (r.replies || []).sort((a,b) => a.id - b.id).map(x => ({ id: x.id, comment: x.comment, time: x.time })),
   }));
+
+  // ── Wavy反応を読み込む ────────────────────────────────────────────────────
+  reactionData = {}; myReactions = new Set();
+  const imgIds = imgs.map(i => i.id);
+  const pinIds = ps.map(p => p.id);
+  const rxQueries = [];
+  if (pinIds.length > 0) rxQueries.push(sbClient.from('reactions').select('*').eq('target_type', 'pin').in('target_id', pinIds));
+  if (imgIds.length > 0) rxQueries.push(sbClient.from('reactions').select('*').eq('target_type', 'image').in('target_id', imgIds));
+  if (rxQueries.length > 0) {
+    const rxResults = await Promise.all(rxQueries);
+    rxResults.forEach(res => {
+      (res.data || []).forEach(r => {
+        const k = r.target_type + '_' + r.target_id;
+        if (!reactionData[k]) reactionData[k] = {};
+        reactionData[k][r.reaction] = (reactionData[k][r.reaction] || 0) + 1;
+        if (r.user_id === currentUser.id) myReactions.add(k + '_' + r.reaction);
+      });
+    });
+  }
+
   return { imgs, ps };
 }
 
@@ -1534,6 +1708,7 @@ function renderImage(imgObj) {
   wrap.appendChild(rotateHandle); wrap.appendChild(scaleHandle);
   wrap.appendChild(replaceHandle); wrap.appendChild(frameHandle);
   wrap.appendChild(reportHandle);
+  wrap.appendChild(imgWavyBarEl(imgObj.id));
 
   if (imgObj.uploading) {
     const badge = document.createElement('div');
@@ -1685,9 +1860,9 @@ function addCard(pin) {
         '<div class="card-actions">' +
           (pin.featured ? '<span class="badge-featured">注目</span>' : '') +
           (canAttachImageToComment() ? '<button class="btn-attach" data-id="' + pin.id + '" title="画像を添付">📷</button>' : '') +
-          '<button class="btn-wavy" data-id="' + pin.id + '">〜 ' + pin.likes + '</button>' +
         '</div>' +
       '</div>' +
+      wavyBarHTML('pin', pin.id) +
       '<button class="btn-expand' + (replies.length > 0 ? ' has-replies' : '') + '" data-id="' + pin.id + '">' +
         (replies.length > 0 ? '💬 ' + replies.length + ' 件の返信' : '💬 返信する') +
       '</button>' +
@@ -1745,27 +1920,13 @@ world.addEventListener('click', async e => {
     colBtn.textContent = pin.cardHidden ? '▶' : '▼';
     await dbUpdatePin(id, { cardHidden: pin.cardHidden }); return;
   }
-  // Wavy
-  const wavyBtn = e.target.closest('.btn-wavy');
+  // Wavy（ピン・画像）
+  const wavyBtn = e.target.closest('.wavy-btn, .img-wavy-btn');
   if (wavyBtn) {
-    const id = +wavyBtn.dataset.id;
-    const pin = pins.find(p => p.id === id); if (!pin) return;
-    pin.likes++;
-    wavyBtn.textContent = '〜 ' + pin.likes;
+    e.stopPropagation();
     wavyBtn.classList.remove('pop'); void wavyBtn.offsetWidth; wavyBtn.classList.add('pop');
-    const upd = { likes: pin.likes };
-    if (pin.likes >= 3 && !pin.featured) {
-      pin.featured = true; upd.featured = true;
-      world.querySelector('.pin-dot[data-id="' + id + '"]')?.classList.add('featured');
-      const card = world.querySelector('.card[data-id="' + id + '"]');
-      if (card) {
-        const badge = document.createElement('span');
-        badge.className = 'badge-featured'; badge.textContent = '注目';
-        card.querySelector('.card-actions').insertBefore(badge, card.querySelector('.card-actions').firstChild);
-      }
-      updateFeaturedBar();
-    }
-    await dbUpdatePin(id, upd); return;
+    await toggleReaction(wavyBtn.dataset.rtype, wavyBtn.dataset.rid, wavyBtn.dataset.reaction);
+    return;
   }
   // Close
   const closeBtn = e.target.closest('.btn-close-card');
@@ -1835,22 +1996,27 @@ function updateCardsZIndex() {
   // likesが多いカードほど前面に表示
   pins.forEach(pin => {
     const card = world.querySelector('.card[data-id="' + pin.id + '"]');
-    if (card) card.style.zIndex = 10 + (pin.likes || 0);
+    const rxTotal = Object.values(reactionData['pin_' + pin.id] || {}).reduce((a, b) => a + b, 0);
+    if (card) card.style.zIndex = 10 + rxTotal;
   });
 }
 
 function updateFeaturedBar() {
   if (boardPanel.classList.contains('open')) renderRankPanel();
   updateCardsZIndex();
-  const top3 = [...pins].filter(p => p.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 3);
-  if (!top3.length) { featuredBar.style.display = 'none'; return; }
+  const pinTotals = pins.map(p => {
+    const k = 'pin_' + p.id;
+    const total = Object.values(reactionData[k] || {}).reduce((a, b) => a + b, 0);
+    return { pin: p, total };
+  }).filter(x => x.total > 0).sort((a, b) => b.total - a.total).slice(0, 3);
+  if (!pinTotals.length) { featuredBar.style.display = 'none'; return; }
   featuredBar.style.display = 'flex';
   featuredBar.innerHTML = '<span class="featured-label">〜 Wavy</span>';
-  top3.forEach(p => {
+  pinTotals.forEach(({ pin: p, total }) => {
     const span = document.createElement('span');
     span.style.cssText = 'font-size:11px;color:#555;border-left:1px solid #eee;padding-left:12px;cursor:pointer;';
     const short = p.comment.length > 24 ? p.comment.slice(0,24)+'…' : p.comment;
-    span.innerHTML = escHtml(short) + ' <span style="color:#3d8b41;font-weight:700;">〜' + p.likes + '</span>';
+    span.innerHTML = escHtml(short) + ' <span style="color:#3d8b41;font-weight:700;">〜' + total + '</span>';
     span.addEventListener('click', () => scrollToCard(p));
     featuredBar.appendChild(span);
   });
@@ -2478,17 +2644,20 @@ function applyTransform() {
 function renderRankPanel() {
   const list = document.getElementById('rank-list');
   list.innerHTML = '';
-  const sorted = [...pins].filter(p => p.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 10);
+  const sorted = [...pins].map(p => {
+    const k = 'pin_' + p.id;
+    return { pin: p, total: Object.values(reactionData[k] || {}).reduce((a, b) => a + b, 0) };
+  }).filter(x => x.total > 0).sort((a, b) => b.total - a.total).slice(0, 10);
   if (sorted.length === 0) {
-    list.innerHTML = '<div class="rank-empty">〜 がついたコメントがまだありません。<br>付箋の 〜 ボタンを押してみよう！</div>';
+    list.innerHTML = '<div class="rank-empty">Wavy反応がまだありません。<br>付箋の反応ボタンを押してみよう！</div>';
     return;
   }
-  sorted.forEach((pin, i) => {
+  sorted.forEach(({ pin, total }, i) => {
     const medal = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
     const item = document.createElement('div');
     item.className = 'rank-item';
     item.innerHTML =
-      '<div class="rank-badge ' + medal + '">〜' + pin.likes + '</div>' +
+      '<div class="rank-badge ' + medal + '">〜' + total + '</div>' +
       '<div class="rank-body">' +
         '<div class="rank-comment">' + escHtml(pin.comment) + '</div>' +
         '<div class="rank-meta">' + pin.time + (pin.featured ? ' · 🔥注目' : '') + '</div>' +
@@ -2497,6 +2666,7 @@ function renderRankPanel() {
       closeRankPanel();
       scrollToCard(pin);
     });
+
     list.appendChild(item);
   });
 }
