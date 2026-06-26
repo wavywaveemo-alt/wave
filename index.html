@@ -1032,6 +1032,24 @@ function mapBoardRow(r) {
 
 // ── DB helpers ───────────────────────────────────────────────────────────────
 async function dbCreateBoard(name, parentId, boardType, applicationReason) {
+  // ── ボード件数チェック ──────────────────────────────
+  if (boardType === 'personal' || boardType === 'private') {
+    const limit = 3;
+    const typeLabel = boardType === 'personal' ? '個人' : '非公開';
+    const count = boards.filter(b => b.userId === currentUser.id && b.boardType === boardType).length;
+    if (count >= limit) {
+      showToast(typeLabel + 'ボードは' + limit + '件までです');
+      return null;
+    }
+  }
+  // 公開ボード申請中チェック
+  if (boardType === 'public') {
+    const hasPending = boards.some(b => b.userId === currentUser.id && b.boardType === 'public' && b.boardStatus === 'pending');
+    if (hasPending) {
+      showToast('審査中の申請があります。承認または却下されるまでお待ちください。');
+      return null;
+    }
+  }
   const id = generateId();
   // 公開ボードは申請承認まで pending 状態
   const isPublicRequest = boardType === 'public';
@@ -2019,6 +2037,17 @@ async function cycleBoardType(boardId, currentType) {
 // ── 既存ボードの公開申請 ───────────────────────────────────────────────────────
 let paModalBoardId = null;
 function openPublicApplyModal(boardId, boardName) {
+  // 申請中のボードが既にあればブロック（同じボードの再申請は除外）
+  const hasPending = boards.some(b =>
+    b.userId === currentUser.id &&
+    b.boardType === 'public' &&
+    b.boardStatus === 'pending' &&
+    String(b.id) !== String(boardId)
+  );
+  if (hasPending) {
+    showToast('審査中の申請があります。承認または却下されるまでお待ちください。');
+    return;
+  }
   paModalBoardId = boardId;
   document.getElementById('pa-reason-input').value = '';
   document.getElementById('public-apply-modal').classList.add('visible');
