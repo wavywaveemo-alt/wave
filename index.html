@@ -317,6 +317,18 @@
   .bc-field textarea:focus { border-color: #3d8b41; }
   .btn-board-type { background: none; border: 1px solid #ddd; cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; line-height: 1.6; color: #999; transition: border-color 0.12s, background 0.12s; }
   .btn-board-type.own:hover { border-color: #3d8b41; background: #f0f7f0; color: #2e6b31; }
+  .btn-board-apply { background: none; border: 1px solid #b0c4b0; cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; line-height: 1.6; color: #3d8b41; margin-left: 4px; transition: border-color 0.12s, background 0.12s; }
+  .btn-board-apply:hover { border-color: #3d8b41; background: #f0f7f0; }
+  #public-apply-modal { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #public-apply-modal.visible { display: flex; }
+  .pa-card { background: #fff; border-radius: 14px; padding: 24px 24px 20px; width: 100%; max-width: 400px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); display: flex; flex-direction: column; gap: 12px; }
+  .pa-card h3 { font-size: 15px; font-weight: 700; color: #222; }
+  .pa-card p { font-size: 12px; color: #777; line-height: 1.6; }
+  .pa-card textarea { width: 100%; border: 1.5px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 13px; outline: none; font-family: inherit; resize: vertical; min-height: 72px; }
+  .pa-card textarea:focus { border-color: #3d8b41; }
+  .pa-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .pa-btn-cancel { background: none; border: 1px solid #ddd; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  .pa-btn-submit { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 
   #report-modal { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.52); display: none; align-items: center; justify-content: center; padding: 16px; }
   #report-modal.visible { display: flex; }
@@ -613,6 +625,18 @@ create policy "users delete" on storage.objects for delete
 </div>
 
 <!-- ── ボード作成モーダル ── -->
+<div id="public-apply-modal">
+  <div class="pa-card">
+    <h3>🌐 公開ボード申請</h3>
+    <p>このボードを公開ボードにする申請を送ります。管理者が承認するまで申請中の状態になります。</p>
+    <textarea id="pa-reason-input" placeholder="申請理由（任意）"></textarea>
+    <div class="pa-btns">
+      <button class="pa-btn-cancel" id="pa-btn-cancel">キャンセル</button>
+      <button class="pa-btn-submit" id="pa-btn-submit">申請する</button>
+    </div>
+  </div>
+</div>
+
 <div id="board-create-modal">
   <div class="bc-card">
     <div class="bc-title">新しいボードを作成</div>
@@ -1168,7 +1192,10 @@ function renderBoardList() {
                 : isOwn
                   ? '<button class="btn-board-type own" data-id="' + board.id + '" data-type="' + board.boardType + '">' +
                       (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開') +
-                    '</button>'
+                    '</button>' +
+                    (board.boardType !== 'public'
+                      ? '<button class="btn-board-apply" data-id="' + board.id + '" data-name="' + escHtml(board.name) + '" title="公開ボードとして申請">🌐申請</button>'
+                      : '')
                   : (board.boardType === 'public' ? '🌐 公開' : board.boardType === 'personal' ? '🔒 個人' : '🔐 非公開')
             ) +
           '</div>' +
@@ -1180,6 +1207,7 @@ function renderBoardList() {
         if (e.target.closest('.btn-board-del')) deleteBoard(board.id);
         else if (e.target.closest('.btn-board-report')) { e.stopPropagation(); openReportModal('board', board.id); }
         else if (e.target.closest('.btn-board-type')) { e.stopPropagation(); cycleBoardType(board.id, e.target.closest('.btn-board-type').dataset.type); }
+        else if (e.target.closest('.btn-board-apply')) { e.stopPropagation(); const btn = e.target.closest('.btn-board-apply'); openPublicApplyModal(btn.dataset.id, btn.dataset.name); }
         else switchToBoard(board.id);
       });
       list.appendChild(item);
@@ -1804,11 +1832,12 @@ document.getElementById('bc-btn-create').addEventListener('click', async () => {
 });
 
 // ── Board type cycle ──────────────────────────────────────────────────────────
-const BOARD_TYPE_CYCLE = ['public', 'personal', 'private'];
 const BOARD_TYPE_LABEL = { public: '🌐 公開', personal: '🔒 個人', private: '🔐 非公開' };
 async function cycleBoardType(boardId, currentType) {
-  const idx = BOARD_TYPE_CYCLE.indexOf(currentType);
-  const nextType = BOARD_TYPE_CYCLE[(idx + 1) % BOARD_TYPE_CYCLE.length];
+  // public → personal、personal ↔ private のみ許可。公開への直接変更は申請が必要
+  const nextType = currentType === 'public' ? 'personal'
+                 : currentType === 'personal' ? 'private'
+                 : 'personal'; // private → personal
   const board = boards.find(b => b.id === boardId);
   if (!board) return;
   board.boardType = nextType;
@@ -1817,6 +1846,54 @@ async function cycleBoardType(boardId, currentType) {
   if (boardId === currentBoardId) updateUploadUI();
   showToast(BOARD_TYPE_LABEL[nextType] + ' に変更しました');
 }
+
+// ── 既存ボードの公開申請 ───────────────────────────────────────────────────────
+let paModalBoardId = null;
+function openPublicApplyModal(boardId, boardName) {
+  paModalBoardId = boardId;
+  document.getElementById('pa-reason-input').value = '';
+  document.getElementById('public-apply-modal').classList.add('visible');
+}
+function closePublicApplyModal() {
+  paModalBoardId = null;
+  document.getElementById('public-apply-modal').classList.remove('visible');
+}
+document.getElementById('pa-btn-cancel').addEventListener('click', closePublicApplyModal);
+document.getElementById('public-apply-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closePublicApplyModal();
+});
+document.getElementById('pa-btn-submit').addEventListener('click', async () => {
+  if (!paModalBoardId) return;
+  const reason = document.getElementById('pa-reason-input').value.trim() || null;
+  const board = boards.find(b => b.id === paModalBoardId);
+  if (!board) { closePublicApplyModal(); return; }
+  closePublicApplyModal();
+
+  // board_type を public に、board_status を pending に更新
+  const { error: upErr } = await sbClient.from('boards').update({
+    board_type: 'public', board_status: 'pending',
+  }).eq('id', paModalBoardId);
+  if (upErr) { showToast('エラー: ' + upErr.message); return; }
+
+  // board_requests に申請レコードを追加
+  const { error: reqErr } = await sbClient.from('board_requests').insert({
+    board_id: paModalBoardId,
+    board_name: board.name,
+    requester_id: currentUser.id,
+    reason,
+  });
+  if (reqErr) {
+    // ロールバック
+    await sbClient.from('boards').update({ board_type: board.boardType, board_status: 'active' }).eq('id', paModalBoardId);
+    showToast('申請エラー: ' + reqErr.message);
+    return;
+  }
+
+  board.boardType = 'public';
+  board.boardStatus = 'pending';
+  renderBoardList();
+  showToast('📋 公開申請を送信しました。承認をお待ちください。');
+});
 
 // ── Board buttons ─────────────────────────────────────────────────────────────
 document.getElementById('btn-add-child').addEventListener('click', () => {
