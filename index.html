@@ -1875,13 +1875,16 @@ document.getElementById('pa-btn-submit').addEventListener('click', async () => {
   }).eq('id', targetBoard.id);
   if (upErr) { showToast('エラー: ' + upErr.message); return; }
 
-  // board_requests に申請レコードを追加
-  const { error: reqErr } = await sbClient.from('board_requests').insert({
+  // board_requests に申請レコードを追加（既存レコードがあれば更新）
+  const { error: reqErr } = await sbClient.from('board_requests').upsert({
     board_id: targetBoard.id,
     board_name: targetBoard.name,
     requester_id: currentUser.id,
     reason,
-  });
+    status: 'pending',
+    reject_reason: null,
+    reviewed_at: null,
+  }, { onConflict: 'board_id' });
   if (reqErr) {
     // ロールバック
     await sbClient.from('boards').update({ board_type: targetBoard.boardType, board_status: 'active' }).eq('id', targetBoard.id);
