@@ -761,11 +761,7 @@ let sbClient = null, currentUser = null;
 
 // ── Wavy反応システム ──────────────────────────────────────────────────────────
 const WAVY_TYPES = [
-  { key: 'surge',     emoji: '🌊', label: '感動' },
-  { key: 'ripple',    emoji: '〜', label: 'いいね' },
-  { key: 'vortex',    emoji: '🌀', label: '夢中' },
-  { key: 'lightning', emoji: '⚡', label: '衝撃' },
-  { key: 'bubble',    emoji: '🫧', label: 'かわいい' },
+  { key: 'vortex', emoji: '🌀', label: '波に乗る' },
 ];
 let reactionData = {}; // key: `${type}_${id}` → { surge:N, ripple:N, ... }
 let myReactions  = new Set(); // `${type}_${id}_${reaction}`
