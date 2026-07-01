@@ -70,6 +70,35 @@
   #btn-logout:hover { background: #ffebee; border-color: #e57373; color: #c62828; }
   #btn-invite { height: 28px; border: 1px solid #b2cfb3; border-radius: 5px; cursor: pointer; background: #f0f7f0; font-size: 11px; padding: 0 9px; color: #2e6b31; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: background 0.12s; }
   #btn-invite:hover { background: #dff0df; }
+  #btn-settings { width: 28px; height: 28px; border: 1px solid #e0e0e0; border-radius: 5px; cursor: pointer; background: #fafafa; font-size: 14px; padding: 0; color: #aaa; flex-shrink: 0; transition: background 0.12s, color 0.12s; display: flex; align-items: center; justify-content: center; }
+  #btn-settings:hover { background: #f0f7f0; border-color: #b2cfb3; color: #3d8b41; }
+  #user-display-name { font-size: 10px; color: #888; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; font-weight: 600; }
+  @media (min-width: 1100px) { #user-display-name { display: block; } }
+
+  /* settings modal */
+  #settings-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #settings-modal.visible { display: flex; }
+  .settings-card { background: #fff; border-radius: 16px; padding: 28px 28px 24px; width: 100%; max-width: 400px; box-shadow: 0 16px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 20px; }
+  .settings-card h2 { font-size: 17px; color: #2e6b31; margin: 0; }
+  .settings-field { display: flex; flex-direction: column; gap: 6px; }
+  .settings-field label { font-size: 12px; font-weight: 600; color: #555; }
+  .settings-field input[type="text"] { border: 1.5px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 14px; font-family: inherit; outline: none; color: #333; transition: border-color 0.15s; }
+  .settings-field input[type="text"]:focus { border-color: #3d8b41; }
+  .settings-toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .settings-toggle-label { font-size: 13px; color: #444; line-height: 1.5; }
+  .settings-toggle-label small { display: block; font-size: 11px; color: #aaa; margin-top: 2px; }
+  .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 24px; cursor: pointer; transition: background 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle-switch input:checked + .toggle-slider { background: #3d8b41; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+  .settings-error { color: #e53935; font-size: 12px; min-height: 16px; }
+  .btn-settings-save { background: #3d8b41; color: #fff; border: none; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-settings-save:hover { background: #4caf50; }
+  .btn-settings-save:disabled { background: #b2cfb3; cursor: not-allowed; }
+  #btn-settings-close { background: transparent; color: #999; border: 1px solid #ddd; border-radius: 8px; padding: 8px 16px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  #btn-settings-close:hover { background: #f5f5f5; }
 
   /* invite modal */
   #invite-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -599,7 +628,8 @@ create policy "users delete" on storage.objects for delete
     <div class="divider"></div>
     <button id="btn-help" title="使い方">?</button>
     <div id="user-info">
-      <span id="user-email" title="ログイン中のアカウント"></span>
+      <span id="user-display-name"></span>
+      <button id="btn-settings" title="設定">⚙</button>
       <button id="btn-invite" title="友達を招待">📨 招待</button>
       <button id="btn-logout" title="ログアウト">⏻</button>
     </div>
@@ -668,6 +698,32 @@ create policy "users delete" on storage.objects for delete
 </div>
 
 <!-- ── ボード作成モーダル ── -->
+<div id="settings-modal">
+  <div class="settings-card">
+    <h2>⚙ 設定</h2>
+    <div class="settings-field">
+      <label>表示名</label>
+      <input type="text" id="settings-username" maxlength="30" placeholder="Surfer">
+      <span style="font-size:11px;color:#aaa">ボードやコメントに表示される名前です</span>
+    </div>
+    <div class="settings-toggle-row">
+      <div class="settings-toggle-label">
+        表示名を公開する
+        <small>OFFにすると「Surfer」として匿名で表示されます</small>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="settings-show-username" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="settings-error" class="settings-error"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button id="btn-settings-close">キャンセル</button>
+      <button class="btn-settings-save" id="btn-settings-save">保存する</button>
+    </div>
+  </div>
+</div>
+
 <div id="invite-modal">
   <div class="invite-card">
     <h2>📨 友達を招待</h2>
@@ -758,6 +814,53 @@ const HARDCODED_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 const STORAGE_BUCKET = 'wave-images';
 
 let sbClient = null, currentUser = null;
+
+// ── プロフィール ──────────────────────────────────────────────────────────────
+let currentProfile = { username: 'Surfer', showUsername: true, role: 'user' };
+
+function getDisplayName(profile) {
+  if (!profile) return 'Surfer';
+  return (profile.showUsername !== false && profile.username) ? profile.username : 'Surfer';
+}
+
+function updateToolbarName() {
+  document.getElementById('user-display-name').textContent = getDisplayName(currentProfile);
+}
+
+// 設定モーダル
+document.getElementById('btn-settings').onclick = openSettingsModal;
+document.getElementById('btn-settings-close').onclick = () => document.getElementById('settings-modal').classList.remove('visible');
+document.getElementById('settings-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('settings-modal')) document.getElementById('settings-modal').classList.remove('visible');
+});
+
+function openSettingsModal() {
+  document.getElementById('settings-username').value = currentProfile.username || 'Surfer';
+  document.getElementById('settings-show-username').checked = currentProfile.showUsername !== false;
+  document.getElementById('settings-error').textContent = '';
+  document.getElementById('settings-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('settings-username').focus(), 80);
+}
+
+document.getElementById('btn-settings-save').onclick = async function() {
+  const btn = this;
+  const username = document.getElementById('settings-username').value.trim() || 'Surfer';
+  const showUsername = document.getElementById('settings-show-username').checked;
+  const errEl = document.getElementById('settings-error');
+  errEl.textContent = '';
+  if (username.length > 30) { errEl.textContent = '表示名は30文字以内にしてください'; return; }
+  btn.disabled = true; btn.textContent = '保存中...';
+  const { error } = await sbClient.from('profiles')
+    .update({ username, show_username: showUsername })
+    .eq('id', currentUser.id);
+  btn.disabled = false; btn.textContent = '保存する';
+  if (error) { errEl.textContent = 'エラー: ' + error.message; return; }
+  currentProfile.username = username;
+  currentProfile.showUsername = showUsername;
+  updateToolbarName();
+  document.getElementById('settings-modal').classList.remove('visible');
+  showToast('設定を保存しました');
+};
 
 // ── Wavy反応システム ──────────────────────────────────────────────────────────
 const WAVY_TYPES = [
@@ -1140,12 +1243,18 @@ async function showApp(user) {
   currentUser = user;
   authScreen.style.display = 'none';
   document.getElementById('main-app').classList.add('visible');
-  document.getElementById('user-email').textContent = user.email;
+  // user-email は削除済みのため不要
   boards = []; pins = []; images = []; colorIdx = 0; currentBoardId = null;
   clearCanvas();
-  // ロール取得（招待クォータ判定用）
-  const { data: prof } = await sbClient.from('profiles').select('role').eq('id', user.id).single();
-  if (prof) currentUserRole = prof.role || 'user';
+  // プロフィール取得（ロール・ユーザー名・表示設定）
+  const { data: prof } = await sbClient.from('profiles').select('role, username, show_username').eq('id', user.id).single();
+  if (prof) {
+    currentUserRole = prof.role || 'user';
+    currentProfile.username     = prof.username || 'Surfer';
+    currentProfile.showUsername = prof.show_username !== false;
+    currentProfile.role         = prof.role || 'user';
+  }
+  updateToolbarName();
   const ok = await checkDBSetup();
   if (ok) { await init(); showHelpIfFirst(); }
 }
@@ -1469,7 +1578,7 @@ async function deleteBoard(boardId) {
   const rootCount = boards.filter(b => !b.parentId).length;
   if (!board.parentId && rootCount <= 1) { alert('最後のルートボードは削除できません'); return; }
   const isOwn = board.userId === currentUser.id;
-  const creator = board.createdByEmail || '他のユーザー';
+  const creator = isOwn ? getDisplayName(currentProfile) : (board.createdByEmail || 'Surfer');
   if (!isOwn) {
     const ok = confirm('⚠️ このボードは ' + creator + ' が作成しました。\n本当に削除しますか？\n（元に戻せません）');
     if (!ok) return;
@@ -1509,8 +1618,8 @@ function renderBoardList() {
       const isOwn  = board.userId === currentUser.id;
       const hasChildren = boards.some(b => b.parentId === board.id);
       const creatorLabel = isOwn
-        ? 'あなたが作成'
-        : (board.createdByEmail || '他のユーザー');
+        ? getDisplayName(currentProfile)
+        : (board.createdByEmail || 'Surfer');
       const boardColor = isCur ? '#2e6b31' : '#6aaa6e';
       const boardFill  = isCur ? '#dff0df' : '#f0f7f0';
       const icon = hasChildren
@@ -1931,7 +2040,7 @@ world.addEventListener('click', async e => {
     const pin = pins.find(p => p.id === id);
     if (!pin) return;
     const isOwn  = pin.userId === currentUser.id;
-    const author = pin.createdByEmail || '他のユーザー';
+    const author = isOwn ? getDisplayName(currentProfile) : (pin.createdByEmail || 'Surfer');
     const msg = isOwn
       ? 'このコメントを削除しますか？（元に戻せません）'
       : '⚠️ ' + author + ' が投稿したコメントです。\n本当に削除しますか？';
