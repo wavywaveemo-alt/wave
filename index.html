@@ -703,13 +703,13 @@ create policy "users delete" on storage.objects for delete
     <h2>⚙ 設定</h2>
     <div class="settings-field">
       <label>表示名</label>
-      <input type="text" id="settings-username" maxlength="30" placeholder="Surfer">
+      <input type="text" id="settings-username" maxlength="30" placeholder="Waever">
       <span style="font-size:11px;color:#aaa">ボードやコメントに表示される名前です</span>
     </div>
     <div class="settings-toggle-row">
       <div class="settings-toggle-label">
         表示名を公開する
-        <small>OFFにすると「Surfer」として匿名で表示されます</small>
+        <small>OFFにすると「Waever」として匿名で表示されます</small>
       </div>
       <label class="toggle-switch">
         <input type="checkbox" id="settings-show-username" checked>
@@ -816,11 +816,11 @@ const STORAGE_BUCKET = 'wave-images';
 let sbClient = null, currentUser = null;
 
 // ── プロフィール ──────────────────────────────────────────────────────────────
-let currentProfile = { username: 'Surfer', showUsername: true, role: 'user' };
+let currentProfile = { username: 'Waever', showUsername: true, role: 'user' };
 
 function getDisplayName(profile) {
-  if (!profile) return 'Surfer';
-  return (profile.showUsername !== false && profile.username) ? profile.username : 'Surfer';
+  if (!profile) return 'Waever';
+  return (profile.showUsername !== false && profile.username) ? profile.username : 'Waever';
 }
 
 function updateToolbarName() {
@@ -835,7 +835,7 @@ document.getElementById('settings-modal').addEventListener('click', e => {
 });
 
 function openSettingsModal() {
-  document.getElementById('settings-username').value = currentProfile.username || 'Surfer';
+  document.getElementById('settings-username').value = currentProfile.username || 'Waever';
   document.getElementById('settings-show-username').checked = currentProfile.showUsername !== false;
   document.getElementById('settings-error').textContent = '';
   document.getElementById('settings-modal').classList.add('visible');
@@ -844,7 +844,7 @@ function openSettingsModal() {
 
 document.getElementById('btn-settings-save').onclick = async function() {
   const btn = this;
-  const username = document.getElementById('settings-username').value.trim() || 'Surfer';
+  const username = document.getElementById('settings-username').value.trim() || 'Waever';
   const showUsername = document.getElementById('settings-show-username').checked;
   const errEl = document.getElementById('settings-error');
   errEl.textContent = '';
@@ -1250,7 +1250,7 @@ async function showApp(user) {
   const { data: prof } = await sbClient.from('profiles').select('role, username, show_username').eq('id', user.id).single();
   if (prof) {
     currentUserRole = prof.role || 'user';
-    currentProfile.username     = prof.username || 'Surfer';
+    currentProfile.username     = prof.username || 'Waever';
     currentProfile.showUsername = prof.show_username !== false;
     currentProfile.role         = prof.role || 'user';
   }
@@ -1578,7 +1578,7 @@ async function deleteBoard(boardId) {
   const rootCount = boards.filter(b => !b.parentId).length;
   if (!board.parentId && rootCount <= 1) { alert('最後のルートボードは削除できません'); return; }
   const isOwn = board.userId === currentUser.id;
-  const creator = isOwn ? getDisplayName(currentProfile) : (board.createdByEmail || 'Surfer');
+  const creator = isOwn ? getDisplayName(currentProfile) : (board.createdByEmail || 'Waever');
   if (!isOwn) {
     const ok = confirm('⚠️ このボードは ' + creator + ' が作成しました。\n本当に削除しますか？\n（元に戻せません）');
     if (!ok) return;
@@ -1619,7 +1619,7 @@ function renderBoardList() {
       const hasChildren = boards.some(b => b.parentId === board.id);
       const creatorLabel = isOwn
         ? getDisplayName(currentProfile)
-        : (board.createdByEmail || 'Surfer');
+        : (board.createdByEmail || 'Waever');
       const boardColor = isCur ? '#2e6b31' : '#6aaa6e';
       const boardFill  = isCur ? '#dff0df' : '#f0f7f0';
       const icon = hasChildren
@@ -2040,7 +2040,7 @@ world.addEventListener('click', async e => {
     const pin = pins.find(p => p.id === id);
     if (!pin) return;
     const isOwn  = pin.userId === currentUser.id;
-    const author = isOwn ? getDisplayName(currentProfile) : (pin.createdByEmail || 'Surfer');
+    const author = isOwn ? getDisplayName(currentProfile) : (pin.createdByEmail || 'Waever');
     const msg = isOwn
       ? 'このコメントを削除しますか？（元に戻せません）'
       : '⚠️ ' + author + ' が投稿したコメントです。\n本当に削除しますか？';

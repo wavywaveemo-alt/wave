@@ -5,12 +5,12 @@
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS show_username BOOLEAN NOT NULL DEFAULT true;
 
--- username が未設定のユーザーに 'Surfer' をセット
-UPDATE public.profiles SET username = 'Surfer' WHERE username IS NULL OR username = '';
+-- username が未設定のユーザーに 'Waever' をセット
+UPDATE public.profiles SET username = 'Waever' WHERE username IS NULL OR username = '';
 
 -- username の NOT NULL + DEFAULT を確保
 ALTER TABLE public.profiles
-  ALTER COLUMN username SET DEFAULT 'Surfer';
+  ALTER COLUMN username SET DEFAULT 'Waever';
 
 -- 自分のプロフィールを更新できるポリシー（なければ追加）
 DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
